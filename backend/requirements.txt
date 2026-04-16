@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+langgraph
+langchain-core
+chromadb
+ollama
+playwright
+requests
+python-dotenv
