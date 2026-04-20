@@ -1,8 +1,14 @@
 import json
+import logging
 import re
-import ollama
 from typing import TYPE_CHECKING
+
+import ollama
+from config import EMBED_MODEL, LLM_MODEL
 from utils.chroma_client import query_chunks
+
+log = logging.getLogger("synthesizer")
+_client = ollama.AsyncClient()
 
 if TYPE_CHECKING:
     from graph import ResearchState
@@ -12,23 +18,25 @@ def strip_think_tags(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
-def synthesizer(state: "ResearchState") -> "ResearchState":
+async def synthesizer(state: "ResearchState") -> "ResearchState":
     original_query = state["original_query"]
-    collection = state.get("_collection")
+    session_id = state["session_id"]
 
-    embedding_resp = ollama.embeddings(model="nomic-embed-text", prompt=original_query)
+    log.info("Embedding query for retrieval...")
+    embedding_resp = await _client.embeddings(
+        model=EMBED_MODEL, prompt=original_query
+    )
     query_embedding = embedding_resp["embedding"]
 
-    if collection is not None:
-        chunks = query_chunks(collection, query_embedding, n_results=12)
-    else:
-        chunks = [
-            {"text": c["text"], "metadata": {"url": c["url"], "title": c.get("title", "")}}
-            for c in state.get("collected_chunks", [])[:12]
-        ]
+    chunks = query_chunks(session_id, query_embedding, n_results=12)
+    log.info(f"Retrieved {len(chunks)} chunks from ChromaDB")
 
     if not chunks:
-        return {**state, "final_report": "No content was collected to synthesize a report.", "gaps": []}
+        return {
+            **state,
+            "final_report": "No content was collected to synthesize a report.",
+            "gaps": [],
+        }
 
     context_parts = []
     for i, chunk in enumerate(chunks, 1):
@@ -37,10 +45,9 @@ def synthesizer(state: "ResearchState") -> "ResearchState":
 
     context = "\n\n---\n\n".join(context_parts)
 
-    word_count = len(context.split())
-    if word_count > 5500:
-        words = context.split()[:5500]
-        context = " ".join(words)
+    words = context.split()
+    if len(words) > 5500:
+        context = " ".join(words[:5500])
 
     prompt = f"""You are a research analyst. Using the provided sources, write a comprehensive research report answering the following question:
 
@@ -63,13 +70,15 @@ After the report, add an HTML comment identifying any remaining research gaps:
 
 If there are no significant gaps, use: <!-- GAPS: [] -->"""
 
-    response = ollama.chat(
-        model="deepseek-r1:8b",
+    log.info("Calling LLM for synthesis...")
+    response = await _client.chat(
+        model=LLM_MODEL,
         messages=[{"role": "user", "content": prompt}],
         options={"num_ctx": 8192},
     )
 
     raw = strip_think_tags(response["message"]["content"])
+    log.info(f"LLM response received ({len(raw)} chars)")
 
     gaps = []
     gaps_match = re.search(r"<!--\s*GAPS:\s*(\[.*?\])\s*-->", raw, re.DOTALL)

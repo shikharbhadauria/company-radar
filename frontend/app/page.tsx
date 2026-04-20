@@ -29,7 +29,7 @@ export default function Home() {
     setErrorMsg("");
 
     try {
-      const resp = await fetch("/api/research", {
+      const resp = await fetch("http://localhost:8000/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: query.trim() }),

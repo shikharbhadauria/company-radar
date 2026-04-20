@@ -1,7 +1,13 @@
 import json
+import logging
 import re
-import ollama
 from typing import TYPE_CHECKING
+
+import ollama
+from config import LLM_MODEL
+
+log = logging.getLogger("planner")
+_client = ollama.AsyncClient()
 
 if TYPE_CHECKING:
     from graph import ResearchState
@@ -11,7 +17,7 @@ def strip_think_tags(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
-def planner(state: "ResearchState") -> "ResearchState":
+async def planner(state: "ResearchState") -> "ResearchState":
     query = state["original_query"]
     gaps = state.get("gaps", [])
     iteration = state.get("iteration", 1)
@@ -26,15 +32,16 @@ After initial research, these gaps remain:
 Generate 3-5 targeted follow-up sub-questions to fill these gaps.
 Return ONLY a valid JSON array of strings. No preamble, no markdown fences, no explanation."""
     else:
-        prompt = f"""You are a research planner. Break down the following research question into 3-5 specific sub-questions that together would fully answer it:
+        prompt = f"""You are a research planner. Break down the following research question into exactly 3 specific sub-questions that together would fully answer it:
 
 "{query}"
 
 Return ONLY a valid JSON array of strings. No preamble, no markdown fences, no explanation.
 Example: ["sub-question 1", "sub-question 2", "sub-question 3"]"""
 
-    response = ollama.chat(
-        model="deepseek-r1:8b",
+    log.info(f"Calling LLM (iteration={iteration}, gaps={len(gaps)})")
+    response = await _client.chat(
+        model=LLM_MODEL,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -46,9 +53,10 @@ Example: ["sub-question 1", "sub-question 2", "sub-question 3"]"""
             raise ValueError("Not a list")
     except Exception:
         lines = [l.strip().lstrip("-•*123456789.").strip() for l in raw.split("\n")]
-        sub_queries = [l for l in lines if l and len(l) > 10][:5]
+        sub_queries = [l for l in lines if l and len(l) > 10][:3]
 
     if not sub_queries:
         sub_queries = [query]
 
+    log.info(f"Sub-queries: {sub_queries}")
     return {**state, "sub_queries": sub_queries}

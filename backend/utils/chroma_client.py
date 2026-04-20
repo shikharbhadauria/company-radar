@@ -2,7 +2,7 @@ import chromadb
 from chromadb.config import Settings
 
 _client = None
-_collection = None
+_registry: dict = {}
 
 
 def get_client():
@@ -26,10 +26,18 @@ def get_collection(session_id: str = "default"):
         name=name,
         metadata={"hnsw:space": "cosine"},
     )
+    _registry[session_id] = collection
     return collection
 
 
-def add_chunk(collection, text: str, embedding: list, metadata: dict, chunk_id: str):
+def get_collection_by_session(session_id: str):
+    return _registry.get(session_id)
+
+
+def add_chunk(session_id: str, text: str, embedding: list, metadata: dict, chunk_id: str):
+    collection = _registry.get(session_id)
+    if collection is None:
+        return
     collection.add(
         ids=[chunk_id],
         embeddings=[embedding],
@@ -38,10 +46,17 @@ def add_chunk(collection, text: str, embedding: list, metadata: dict, chunk_id: 
     )
 
 
-def query_chunks(collection, embedding: list, n_results: int = 15):
+def query_chunks(session_id: str, embedding: list, n_results: int = 12):
+    collection = _registry.get(session_id)
+    if collection is None:
+        return []
+    count = collection.count()
+    if count == 0:
+        return []
+    n = min(n_results, count)
     results = collection.query(
         query_embeddings=[embedding],
-        n_results=n_results,
+        n_results=n,
         include=["documents", "metadatas", "distances"],
     )
     chunks = []

@@ -1,8 +1,16 @@
 import json
 import sys
 import asyncio
+import logging
 import requests
 from fastapi import FastAPI
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("main")
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -51,16 +59,17 @@ async def run_research(query: str):
 
     import uuid
     session_id = uuid.uuid4().hex[:8]
-    collection = get_collection(session_id)
+    get_collection(session_id)
+    log.info(f"[{session_id}] Starting research: {query!r}")
 
     initial_state = {
         "original_query": query,
+        "session_id": session_id,
         "sub_queries": [],
         "collected_chunks": [],
         "iteration": 1,
         "gaps": [],
         "final_report": "",
-        "_collection": collection,
     }
 
     node_messages = {
@@ -76,6 +85,7 @@ async def run_research(query: str):
             name = event.get("name", "")
 
             if kind == "on_chain_start" and name in node_messages:
+                log.info(f"[{session_id}] NODE START: {name}")
                 yield sse_event({
                     "type": "progress",
                     "node": name,
@@ -83,14 +93,19 @@ async def run_research(query: str):
                 })
                 await asyncio.sleep(0)
 
-            elif kind == "on_chain_end" and name == "synthesizer":
-                output = event.get("data", {}).get("output", {})
-                report = output.get("final_report", "")
-                if report:
-                    yield sse_event({"type": "report", "content": report})
-                    await asyncio.sleep(0)
+            elif kind == "on_chain_end" and name in node_messages:
+                log.info(f"[{session_id}] NODE END:   {name}")
+
+                if name == "synthesizer":
+                    output = event.get("data", {}).get("output", {})
+                    report = output.get("final_report", "")
+                    if report:
+                        log.info(f"[{session_id}] Report ready ({len(report)} chars)")
+                        yield sse_event({"type": "report", "content": report})
+                        await asyncio.sleep(0)
 
     except Exception as e:
+        log.exception(f"[{session_id}] Research failed: {e}")
         yield sse_event({"type": "error", "message": str(e)})
 
 

@@ -37,6 +37,8 @@ docker compose up -d
 
 ```bash
 cd backend
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 ```
@@ -45,6 +47,7 @@ playwright install chromium
 
 ```bash
 cd backend
+source .venv/bin/activate   # activate venv if not already active
 uvicorn main:server --port 8000 --reload
 ```
 

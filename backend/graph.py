@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Any
+from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from nodes.planner import planner
 from nodes.search_embed import search_embed
@@ -7,12 +7,12 @@ from nodes.synthesizer import synthesizer
 
 class ResearchState(TypedDict):
     original_query: str
+    session_id: str
     sub_queries: List[str]
     collected_chunks: List[dict]
     iteration: int
     gaps: List[str]
     final_report: str
-    _collection: Any
 
 
 def should_continue(state: ResearchState) -> str:

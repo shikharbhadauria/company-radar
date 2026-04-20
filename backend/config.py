@@ -1,0 +1,2 @@
+LLM_MODEL = "qwen2.5:1.5b"
+EMBED_MODEL = "nomic-embed-text"
