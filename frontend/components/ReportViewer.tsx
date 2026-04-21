@@ -27,7 +27,7 @@ export default function ReportViewer({ report, onReset }: Props) {
             {copied ? "Copied!" : "Copy report"}
           </button>
           <button onClick={onReset} style={styles.btnPrimary}>
-            New research
+            New company
           </button>
         </div>
       </div>

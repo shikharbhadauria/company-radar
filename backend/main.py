@@ -45,25 +45,37 @@ def startup_check():
         )
 
 
+class UserProfile(BaseModel):
+    experience: str
+    target: str
+    priorities: list[str]
+    reason_leaving: str
+
+
 class ResearchRequest(BaseModel):
-    query: str
+    company_name: str
+    user_profile: UserProfile
 
 
 def sse_event(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
 
-async def run_research(query: str):
+async def run_research(company_name: str, user_profile: dict):
     from graph import research_graph
     from utils.chroma_client import get_collection
 
     import uuid
     session_id = uuid.uuid4().hex[:8]
     get_collection(session_id)
-    log.info(f"[{session_id}] Starting research: {query!r}")
+    log.info(f"[{session_id}] Starting company analysis: {company_name!r}")
+
+    original_query = f"software engineer salary work life balance culture experience at {company_name}"
 
     initial_state = {
-        "original_query": query,
+        "original_query": original_query,
+        "company_name": company_name,
+        "user_profile": user_profile,
         "session_id": session_id,
         "sub_queries": [],
         "collected_chunks": [],
@@ -112,7 +124,7 @@ async def run_research(query: str):
 @app.post("/research")
 async def research(req: ResearchRequest):
     async def stream():
-        async for chunk in run_research(req.query):
+        async for chunk in run_research(req.company_name, req.user_profile.model_dump()):
             yield chunk
 
     return StreamingResponse(

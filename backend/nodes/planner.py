@@ -18,26 +18,30 @@ def strip_think_tags(text: str) -> str:
 
 
 async def planner(state: "ResearchState") -> "ResearchState":
-    query = state["original_query"]
+    company = state["company_name"]
     gaps = state.get("gaps", [])
     iteration = state.get("iteration", 1)
 
     if iteration > 1 and gaps:
-        prompt = f"""You are a research planner. The original research question is:
-"{query}"
+        prompt = f"""You are a company research specialist. You are researching "{company}" as a potential employer.
 
-After initial research, these gaps remain:
+These information gaps remain after initial research:
 {json.dumps(gaps)}
 
-Generate 3-5 targeted follow-up sub-questions to fill these gaps.
-Return ONLY a valid JSON array of strings. No preamble, no markdown fences, no explanation."""
+Generate 4 targeted search queries to fill these gaps. Each query should target a specific source or angle.
+Return ONLY a valid JSON array of search query strings. No preamble, no markdown fences, no explanation."""
     else:
-        prompt = f"""You are a research planner. Break down the following research question into exactly 3 specific sub-questions that together would fully answer it:
+        prompt = f"""You are a company research specialist. Generate 5 targeted search queries to research "{company}" as a potential employer.
 
-"{query}"
+Cover these angles:
+1. Employee reviews and work culture (Glassdoor, AmbitionBox)
+2. Software engineer salary data in India (AmbitionBox, Naukri, Levels.fyi)
+3. Employee experiences and opinions (Reddit, LinkedIn)
+4. Company funding, revenue, growth or layoffs (Tracxn, Crunchbase, news)
+5. Engineering culture, tech stack, engineering blog
 
-Return ONLY a valid JSON array of strings. No preamble, no markdown fences, no explanation.
-Example: ["sub-question 1", "sub-question 2", "sub-question 3"]"""
+Return ONLY a valid JSON array of 5 search query strings. No preamble, no markdown fences, no explanation.
+Example: ["{company} Glassdoor reviews", "{company} software engineer salary India", ...]"""
 
     log.info(f"Calling LLM (iteration={iteration}, gaps={len(gaps)})")
     response = await _client.chat(

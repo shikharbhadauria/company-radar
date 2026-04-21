@@ -38,6 +38,14 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
             "gaps": [],
         }
 
+    company_name = state.get("company_name", "this company")
+    user_profile = state.get("user_profile", {})
+    experience = user_profile.get("experience", "not specified")
+    target = user_profile.get("target", "not specified")
+    reason_leaving = user_profile.get("reason_leaving", "not specified")
+    priorities = user_profile.get("priorities", ["compensation", "work-life balance", "stability", "growth"])
+    priorities_str = ", ".join(f"{i+1}. {p}" for i, p in enumerate(priorities))
+
     context_parts = []
     for i, chunk in enumerate(chunks, 1):
         url = chunk["metadata"].get("url", "")
@@ -49,26 +57,59 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
     if len(words) > 5500:
         context = " ".join(words[:5500])
 
-    prompt = f"""You are a research analyst. Using the provided sources, write a comprehensive research report answering the following question:
+    prompt = f"""You are a brutally honest career advisor and company intelligence analyst.
 
-QUESTION: {original_query}
+A software developer is evaluating "{company_name}" as a potential employer.
 
-SOURCES:
+CANDIDATE PROFILE:
+- Experience & stack: {experience}
+- Target: {target}
+- Leaving because: {reason_leaving}
+- Priorities in order: {priorities_str}
+
+RESEARCH SOURCES:
 {context}
 
-Write a structured markdown report with:
-- A clear introduction
-- Multiple sections with ## headings covering different aspects
-- Inline citations like [1], [2], etc. referencing the source numbers above
-- A balanced, analytical perspective
-- A ## Sources section at the end listing all cited URLs
+Based strictly on the sources above, write a company intelligence report in this EXACT format:
 
-The report should be 800-1500 words.
+## {company_name}
 
-After the report, add an HTML comment identifying any remaining research gaps:
+**What this company actually is** (3-4 lines — cut through the marketing, describe what they really do and how they make money)
+
+**Company vitals**
+Size | Funding | Revenue | Glassdoor rating | Dev salaries (INR) | Remote policy
+
+---
+
+### Green flags
+For each genuine positive signal found in the sources:
+- **[Signal name]**: What it is, where you found it ([source number]), why it matters for this candidate
+
+### Red flags
+For each genuine concern found in the sources:
+- **[Signal name]**: What it is, where you found it ([source number]), why it matters for this candidate
+
+---
+
+**Score:** X green / X red flags
+
+**The thing most people miss about this company:**
+One non-obvious insight that doesn't show up in standard checklist reviews.
+
+**Verdict: PURSUE / CAUTION / AVOID**
+Be direct. One paragraph. Tell the candidate what you would do if this were your career decision and the single most important reason why.
+
+RULES:
+- Only cite signals backed by the provided sources — no guessing
+- Salary data must be in INR where available
+- No generic flags without evidence from the sources ("good culture" without a source = useless)
+- If the sources lack enough data to evaluate a dimension, say so honestly
+- Flag anything surprising — good or bad — even if unusual
+
+After the report, add an HTML comment with remaining research gaps:
 <!-- GAPS: ["gap 1", "gap 2"] -->
 
-If there are no significant gaps, use: <!-- GAPS: [] -->"""
+If coverage is sufficient, use: <!-- GAPS: [] -->"""
 
     log.info("Calling LLM for synthesis...")
     response = await _client.chat(

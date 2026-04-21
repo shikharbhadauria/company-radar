@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import ResearchInput from "@/components/ResearchInput";
+import ResearchInput, { UserProfile, DEFAULT_PROFILE } from "@/components/ResearchInput";
 import ProgressStream from "@/components/ProgressStream";
 import ReportViewer from "@/components/ReportViewer";
 
@@ -14,14 +14,16 @@ interface ProgressEvent {
 type Status = "idle" | "loading" | "done" | "error";
 
 export default function Home() {
-  const [query, setQuery] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [progressEvents, setProgressEvents] = useState<ProgressEvent[]>([]);
   const [report, setReport] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async () => {
-    if (!query.trim() || status === "loading") return;
+    if (!companyName.trim() || status === "loading") return;
 
     setStatus("loading");
     setProgressEvents([]);
@@ -32,7 +34,10 @@ export default function Home() {
       const resp = await fetch("http://localhost:8000/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim() }),
+        body: JSON.stringify({
+          company_name: companyName.trim(),
+          user_profile: profile,
+        }),
         cache: "no-store",
       });
 
@@ -84,7 +89,7 @@ export default function Home() {
   };
 
   const handleReset = () => {
-    setQuery("");
+    setCompanyName("");
     setStatus("idle");
     setProgressEvents([]);
     setReport("");
@@ -94,8 +99,12 @@ export default function Home() {
   return (
     <main>
       <ResearchInput
-        query={query}
-        setQuery={setQuery}
+        companyName={companyName}
+        setCompanyName={setCompanyName}
+        profile={profile}
+        setProfile={setProfile}
+        profileOpen={profileOpen}
+        setProfileOpen={setProfileOpen}
         onSubmit={handleSubmit}
         loading={status === "loading"}
       />
