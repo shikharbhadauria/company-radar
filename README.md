@@ -6,7 +6,7 @@ A full-stack local research system that replicates Claude's Research feature —
 
 - **Frontend**: Next.js 14 (App Router, TypeScript)
 - **Backend**: Python FastAPI + LangGraph
-- **LLM + Embeddings**: Ollama (`deepseek-r1:8b` + `nomic-embed-text`)
+- **LLM + Embeddings**: Ollama (`qwen2.5:1.5b` + `nomic-embed-text`)
 - **Web Search**: SearXNG (self-hosted via Docker)
 - **Web Scraping**: Playwright
 - **Vector Store**: ChromaDB (embedded, persists to disk)
@@ -23,7 +23,7 @@ A full-stack local research system that replicates Claude's Research feature —
 ### 1. Pull Ollama models
 
 ```bash
-ollama pull deepseek-r1:8b
+ollama pull qwen2.5:1.5b
 ollama pull nomic-embed-text
 ```
 
@@ -64,7 +64,7 @@ npm run dev
 ## How It Works
 
 1. You type a research query
-2. The **Planner** node decomposes it into 3–5 sub-questions using `deepseek-r1:8b`
+2. The **Planner** node decomposes it into 3–5 sub-questions using `qwen2.5:1.5b`
 3. The **Search & Embed** node searches SearXNG, scrapes pages with Playwright, chunks the text, embeds it with `nomic-embed-text`, and stores it in ChromaDB
 4. The **Synthesizer** node retrieves the top 12 most relevant chunks via cosine similarity and generates a structured markdown report with inline citations
 5. If research gaps are detected, the loop runs up to 3 iterations

@@ -28,7 +28,7 @@ export default function ResearchInput({ query, setQuery, onSubmit, loading }: Pr
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Local Deep Research</h1>
+      <h1 style={styles.title}>CompanyRadar</h1>
       <p style={styles.subtitle}>Runs entirely on your machine. No API costs. No data leaves your device.</p>
       <div style={styles.inputWrapper}>
         <textarea
