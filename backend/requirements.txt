@@ -4,6 +4,7 @@ langgraph
 langchain-core
 chromadb
 ollama
+groq
 playwright
 requests
 python-dotenv

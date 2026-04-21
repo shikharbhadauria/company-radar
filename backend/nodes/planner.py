@@ -3,18 +3,14 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-import ollama
+from groq import AsyncGroq
 from config import LLM_MODEL
 
 log = logging.getLogger("planner")
-_client = ollama.AsyncClient()
+_client = AsyncGroq()
 
 if TYPE_CHECKING:
     from graph import ResearchState
-
-
-def strip_think_tags(text: str) -> str:
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
 async def planner(state: "ResearchState") -> "ResearchState":
@@ -43,24 +39,32 @@ Cover these angles:
 Return ONLY a valid JSON array of 5 search query strings. No preamble, no markdown fences, no explanation.
 Example: ["{company} Glassdoor reviews", "{company} software engineer salary India", ...]"""
 
-    log.info(f"Calling LLM (iteration={iteration}, gaps={len(gaps)})")
-    response = await _client.chat(
+    log.info(f"Calling Groq API (iteration={iteration}, gaps={len(gaps)})")
+    response = await _client.chat.completions.create(
         model=LLM_MODEL,
+        max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = strip_think_tags(response["message"]["content"])
+    raw = response.choices[0].message.content.strip()
 
     try:
         sub_queries = json.loads(raw)
         if not isinstance(sub_queries, list):
             raise ValueError("Not a list")
     except Exception:
-        lines = [l.strip().lstrip("-•*123456789.").strip() for l in raw.split("\n")]
-        sub_queries = [l for l in lines if l and len(l) > 10][:3]
+        json_match = re.search(r"\[.*?\]", raw, re.DOTALL)
+        if json_match:
+            try:
+                sub_queries = json.loads(json_match.group(0))
+            except Exception:
+                sub_queries = []
+        if not sub_queries:
+            lines = [l.strip().lstrip("-•*123456789.").strip() for l in raw.split("\n")]
+            sub_queries = [l for l in lines if l and len(l) > 10][:5]
 
     if not sub_queries:
-        sub_queries = [query]
+        sub_queries = [f"{company} employee reviews salary work culture"]
 
     log.info(f"Sub-queries: {sub_queries}")
     return {**state, "sub_queries": sub_queries}

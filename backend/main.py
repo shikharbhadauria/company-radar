@@ -1,9 +1,13 @@
 import json
+import os
 import sys
 import asyncio
 import logging
 import requests
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,6 +45,12 @@ def startup_check():
         print(
             "ERROR: Ollama is not running or unreachable at http://localhost:11434. "
             "Please start Ollama before running the backend.",
+            file=sys.stderr,
+        )
+    if not os.environ.get("GROQ_API_KEY"):
+        print(
+            "ERROR: GROQ_API_KEY is not set. "
+            "Please set it in your environment or .env file before running the backend.",
             file=sys.stderr,
         )
 
