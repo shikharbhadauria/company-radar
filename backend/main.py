@@ -95,38 +95,52 @@ async def run_research(company_name: str, user_profile: dict):
         "sources": [],
     }
 
-    node_messages = {
-        "planner": "Breaking down your query into sub-questions...",
-        "search_embed": "Searching the web and embedding content...",
-        "synthesizer": "Synthesizing research into a report...",
-        "increment": "Checking for research gaps...",
+    node_labels = {
+        "planner": "Planning research queries",
+        "search_embed": "Searching & scraping the web",
+        "synthesizer": "Writing the intelligence report",
+        "increment": "Checking for research gaps",
     }
+
+    # Collect the final report here — emit once after stream ends, not on every iteration
+    last_report = ""
+    last_sources: list = []
 
     try:
         async for event in research_graph.astream_events(initial_state, version="v2"):
             kind = event.get("event")
             name = event.get("name", "")
 
-            if kind == "on_chain_start" and name in node_messages:
+            if kind == "on_chain_start" and name in node_labels:
                 log.info(f"[{session_id}] NODE START: {name}")
                 yield sse_event({
                     "type": "progress",
                     "node": name,
-                    "message": node_messages[name],
+                    "message": node_labels[name],
+                    "detail": "",
                 })
                 await asyncio.sleep(0)
 
-            elif kind == "on_chain_end" and name in node_messages:
-                log.info(f"[{session_id}] NODE END:   {name}")
-
+            elif kind == "on_chain_end" and name in node_labels:
+                log.info(f"[{session_id}] NODE END: {name}")
                 if name == "synthesizer":
                     output = event.get("data", {}).get("output", {})
-                    report = output.get("final_report", "")
-                    sources = output.get("sources", [])
-                    if report:
-                        log.info(f"[{session_id}] Report ready ({len(report)} chars)")
-                        yield sse_event({"type": "report", "content": report, "sources": sources})
-                        await asyncio.sleep(0)
+                    last_report = output.get("final_report", "")
+                    last_sources = output.get("sources", [])
+
+            elif kind == "on_custom_event" and name == "progress":
+                data = event.get("data", {})
+                yield sse_event({
+                    "type": "progress",
+                    "node": data.get("node", ""),
+                    "message": data.get("message", ""),
+                    "detail": data.get("detail", ""),
+                })
+                await asyncio.sleep(0)
+
+        if last_report:
+            log.info(f"[{session_id}] Report ready ({len(last_report)} chars), emitting once")
+            yield sse_event({"type": "report", "content": last_report, "sources": last_sources})
 
     except Exception as e:
         log.exception(f"[{session_id}] Research failed: {e}")

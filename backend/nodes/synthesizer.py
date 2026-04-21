@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import ollama
 from groq import AsyncGroq
+from langchain_core.callbacks.manager import adispatch_custom_event
 from config import EMBED_MODEL, SYNTHESIS_MODEL
 from utils.chroma_client import query_chunks
 
@@ -118,6 +119,11 @@ RESEARCH SOURCES:
 
 Write the company intelligence report in the exact format specified. Replace {{company_name}} in the template with "{company_name}"."""
 
+    await adispatch_custom_event("progress", {
+        "node": "synthesizer",
+        "message": f"Analyzing {len(chunks)} sources with {SYNTHESIS_MODEL}",
+        "detail": f"{len(words):,} words of research context",
+    })
     log.info("Calling Groq API for synthesis...")
     response = await _groq_client.chat.completions.create(
         model=SYNTHESIS_MODEL,

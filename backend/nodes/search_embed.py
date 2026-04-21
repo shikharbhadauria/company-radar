@@ -5,6 +5,7 @@ import ollama
 from urllib.parse import urlparse
 from config import EMBED_MODEL
 from typing import TYPE_CHECKING
+from langchain_core.callbacks.manager import adispatch_custom_event
 
 log = logging.getLogger("search_embed")
 _client = ollama.AsyncClient()
@@ -104,8 +105,14 @@ async def search_embed(state: "ResearchState") -> "ResearchState":
     session_id = state["session_id"]
     company_name = state.get("company_name", "")
 
-    for query in sub_queries:
+    for q_idx, query in enumerate(sub_queries, 1):
         log.info(f"Searching: {query!r}")
+        await adispatch_custom_event("progress", {
+            "node": "search_embed",
+            "message": f"Query {q_idx}/{len(sub_queries)}: searching the web",
+            "detail": query,
+        })
+
         results = search_web(query)
 
         # Filter blocked domains and already-seen URLs
@@ -123,9 +130,16 @@ async def search_embed(state: "ResearchState") -> "ResearchState":
         urls = [r["url"] for r in new_results]
         titles = {r["url"]: r["title"] for r in new_results}
 
+        await adispatch_custom_event("progress", {
+            "node": "search_embed",
+            "message": f"Scraping {len(urls)} pages",
+            "detail": ", ".join(_get_domain(u) for u in urls[:4]),
+        })
+
         log.info(f"  Scraping {len(urls)} URLs...")
         scraped_texts = await scrape_urls(urls)
 
+        embedded_count = 0
         for url, text in zip(urls, scraped_texts):
             existing_urls.add(url)
             if not text:
@@ -139,6 +153,7 @@ async def search_embed(state: "ResearchState") -> "ResearchState":
             chunks = chunk_text(text)[:MAX_CHUNKS_PER_PAGE]
             title = titles.get(url, "")
             log.info(f"  Embedding {len(chunks)} chunks from {url}")
+            embedded_count += len(chunks)
 
             for i, chunk in enumerate(chunks):
                 chunk_id = hashlib.md5(f"{url}_{i}".encode()).hexdigest()
@@ -166,4 +181,9 @@ async def search_embed(state: "ResearchState") -> "ResearchState":
                     continue
 
     log.info(f"Done. Total chunks collected: {len(collected_chunks)}")
+    await adispatch_custom_event("progress", {
+        "node": "search_embed",
+        "message": f"Done — collected {len(collected_chunks)} content chunks",
+        "detail": "",
+    })
     return {**state, "collected_chunks": collected_chunks}

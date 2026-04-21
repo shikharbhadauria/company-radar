@@ -8,6 +8,7 @@ import ReportViewer from "@/components/ReportViewer";
 interface ProgressEvent {
   node: string;
   message: string;
+  detail?: string;
   timestamp: number;
 }
 
@@ -73,7 +74,7 @@ export default function Home() {
             if (event.type === "progress") {
               setProgressEvents((prev) => [
                 ...prev,
-                { node: event.node, message: event.message, timestamp: Date.now() },
+                { node: event.node, message: event.message, detail: event.detail, timestamp: Date.now() },
               ]);
             } else if (event.type === "report") {
               setReport(event.content);
@@ -119,7 +120,7 @@ export default function Home() {
       />
 
       {(status === "loading" || progressEvents.length > 0) && status !== "done" && (
-        <ProgressStream events={progressEvents} />
+        <ProgressStream events={progressEvents} loading={status === "loading"} />
       )}
 
       {status === "error" && (
