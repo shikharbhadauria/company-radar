@@ -24,25 +24,30 @@ async def planner(state: "ResearchState") -> "ResearchState":
 These information gaps remain after initial research:
 {json.dumps(gaps)}
 
-Generate 4 targeted search queries to fill these gaps. Each query should target a specific source or angle.
+Generate 5 targeted search queries to fill these gaps. Prefer site-specific searches on Glassdoor, AmbitionBox, or Reddit.
 Return ONLY a valid JSON array of search query strings. No preamble, no markdown fences, no explanation."""
     else:
-        prompt = f"""You are a company research specialist. Generate 5 targeted search queries to research "{company}" as a potential employer.
+        prompt = f"""You are a company research specialist. Generate 9 targeted search queries to research "{company}" as a potential employer for a software engineer in India.
 
-Cover these angles:
-1. Employee reviews and work culture (Glassdoor, AmbitionBox)
-2. Software engineer salary data in India (AmbitionBox, Naukri, Levels.fyi)
-3. Employee experiences and opinions (Reddit, LinkedIn)
-4. Company funding, revenue, growth or layoffs (Tracxn, Crunchbase, news)
-5. Engineering culture, tech stack, engineering blog
+You MUST include these exact site-specific queries (replace the company name):
+1. site:glassdoor.co.in "{company}" reviews
+2. site:ambitionbox.com "{company}"
+3. site:reddit.com "{company}" software engineer experience
 
-Return ONLY a valid JSON array of 5 search query strings. No preamble, no markdown fences, no explanation.
-Example: ["{company} Glassdoor reviews", "{company} software engineer salary India", ...]"""
+Also include these broader queries:
+4. {company} software engineer salary India ₹ LPA
+5. {company} work life balance office culture employee experience
+6. {company} management office politics appraisal hike
+7. {company} funding revenue employees growth layoffs 2023 2024
+8. {company} engineering tech stack interview process
+9. {company} Glassdoor AmbitionBox rating reviews
+
+Return ONLY a valid JSON array of exactly 9 search query strings. No preamble, no markdown fences, no explanation."""
 
     log.info(f"Calling Groq API (iteration={iteration}, gaps={len(gaps)})")
     response = await _client.chat.completions.create(
         model=LLM_MODEL,
-        max_tokens=512,
+        max_tokens=600,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -61,7 +66,7 @@ Example: ["{company} Glassdoor reviews", "{company} software engineer salary Ind
                 sub_queries = []
         if not sub_queries:
             lines = [l.strip().lstrip("-•*123456789.").strip() for l in raw.split("\n")]
-            sub_queries = [l for l in lines if l and len(l) > 10][:5]
+            sub_queries = [l for l in lines if l and len(l) > 10][:9]
 
     if not sub_queries:
         sub_queries = [f"{company} employee reviews salary work culture"]

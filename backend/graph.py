@@ -15,6 +15,7 @@ class ResearchState(TypedDict):
     iteration: int
     gaps: List[str]
     final_report: str
+    sources: List[dict]
 
 
 def should_continue(state: ResearchState) -> str:

@@ -11,6 +11,12 @@ interface ProgressEvent {
   timestamp: number;
 }
 
+interface Source {
+  index: number;
+  url: string;
+  title: string;
+}
+
 type Status = "idle" | "loading" | "done" | "error";
 
 export default function Home() {
@@ -20,6 +26,7 @@ export default function Home() {
   const [status, setStatus] = useState<Status>("idle");
   const [progressEvents, setProgressEvents] = useState<ProgressEvent[]>([]);
   const [report, setReport] = useState("");
+  const [sources, setSources] = useState<Source[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async () => {
@@ -70,6 +77,7 @@ export default function Home() {
               ]);
             } else if (event.type === "report") {
               setReport(event.content);
+              setSources(event.sources || []);
               setStatus("done");
             } else if (event.type === "error") {
               setErrorMsg(event.message);
@@ -93,6 +101,7 @@ export default function Home() {
     setStatus("idle");
     setProgressEvents([]);
     setReport("");
+    setSources([]);
     setErrorMsg("");
   };
 
@@ -123,7 +132,7 @@ export default function Home() {
       )}
 
       {status === "done" && report && (
-        <ReportViewer report={report} onReset={handleReset} />
+        <ReportViewer report={report} sources={sources} onReset={handleReset} />
       )}
     </main>
   );

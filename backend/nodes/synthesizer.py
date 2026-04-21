@@ -70,7 +70,7 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
     )
     query_embedding = embedding_resp["embedding"]
 
-    chunks = query_chunks(session_id, query_embedding, n_results=12)
+    chunks = query_chunks(session_id, query_embedding, n_results=20)
     log.info(f"Retrieved {len(chunks)} chunks from ChromaDB")
 
     if not chunks:
@@ -89,15 +89,21 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
     priorities_str = ", ".join(f"{i+1}. {p}" for i, p in enumerate(priorities))
 
     context_parts = []
+    sources = []
+    seen_urls: set = set()
     for i, chunk in enumerate(chunks, 1):
         url = chunk["metadata"].get("url", "")
+        title = chunk["metadata"].get("title", "") or url
         context_parts.append(f"[{i}] ({url})\n{chunk['text']}")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            sources.append({"index": i, "url": url, "title": title})
 
     context = "\n\n---\n\n".join(context_parts)
 
     words = context.split()
-    if len(words) > 3000:
-        context = " ".join(words[:3000])
+    if len(words) > 5000:
+        context = " ".join(words[:5000])
 
     user_message = f"""Analyze "{company_name}" as a potential employer for this candidate:
 
@@ -134,4 +140,4 @@ Write the company intelligence report in the exact format specified. Replace {{c
             gaps = []
         raw = re.sub(r"<!--\s*GAPS:\s*\[.*?\]\s*-->", "", raw, flags=re.DOTALL).strip()
 
-    return {**state, "final_report": raw, "gaps": gaps}
+    return {**state, "final_report": raw, "gaps": gaps, "sources": sources}

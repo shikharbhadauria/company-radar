@@ -92,6 +92,7 @@ async def run_research(company_name: str, user_profile: dict):
         "iteration": 1,
         "gaps": [],
         "final_report": "",
+        "sources": [],
     }
 
     node_messages = {
@@ -121,9 +122,10 @@ async def run_research(company_name: str, user_profile: dict):
                 if name == "synthesizer":
                     output = event.get("data", {}).get("output", {})
                     report = output.get("final_report", "")
+                    sources = output.get("sources", [])
                     if report:
                         log.info(f"[{session_id}] Report ready ({len(report)} chars)")
-                        yield sse_event({"type": "report", "content": report})
+                        yield sse_event({"type": "report", "content": report, "sources": sources})
                         await asyncio.sleep(0)
 
     except Exception as e:
