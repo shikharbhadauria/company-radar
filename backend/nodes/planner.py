@@ -3,8 +3,8 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from groq import AsyncGroq
 from config import LLM_MODEL
+from groq import AsyncGroq
 
 log = logging.getLogger("planner")
 _client = AsyncGroq()

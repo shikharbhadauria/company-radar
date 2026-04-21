@@ -120,7 +120,11 @@ export default function Home() {
       />
 
       {(status === "loading" || progressEvents.length > 0) && status !== "done" && (
-        <ProgressStream events={progressEvents} loading={status === "loading"} />
+        <ProgressStream
+          events={progressEvents}
+          loading={status === "loading"}
+          companyName={companyName}
+        />
       )}
 
       {status === "error" && (

@@ -4,9 +4,9 @@ import re
 from typing import TYPE_CHECKING
 
 import ollama
+from config import EMBED_MODEL, SYNTHESIS_MODEL
 from groq import AsyncGroq
 from langchain_core.callbacks.manager import adispatch_custom_event
-from config import EMBED_MODEL, SYNTHESIS_MODEL
 from utils.chroma_client import query_chunks
 
 log = logging.getLogger("synthesizer")
@@ -60,7 +60,6 @@ After the report, add an HTML comment with remaining research gaps:
 If coverage is sufficient, use: <!-- GAPS: [] -->"""
 
 
-
 async def synthesizer(state: "ResearchState") -> "ResearchState":
     original_query = state["original_query"]
     session_id = state["session_id"]
@@ -86,8 +85,10 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
     experience = user_profile.get("experience", "not specified")
     target = user_profile.get("target", "not specified")
     reason_leaving = user_profile.get("reason_leaving", "not specified")
-    priorities = user_profile.get("priorities", ["compensation", "work-life balance", "stability", "growth"])
-    priorities_str = ", ".join(f"{i+1}. {p}" for i, p in enumerate(priorities))
+    priorities = user_profile.get(
+        "priorities", ["compensation", "work-life balance", "stability", "growth"]
+    )
+    priorities_str = ", ".join(f"{i + 1}. {p}" for i, p in enumerate(priorities))
 
     context_parts = []
     sources = []
@@ -119,11 +120,14 @@ RESEARCH SOURCES:
 
 Write the company intelligence report in the exact format specified. Replace {{company_name}} in the template with "{company_name}"."""
 
-    await adispatch_custom_event("progress", {
-        "node": "synthesizer",
-        "message": f"Analyzing {len(chunks)} sources with {SYNTHESIS_MODEL}",
-        "detail": f"{len(words):,} words of research context",
-    })
+    await adispatch_custom_event(
+        "progress",
+        {
+            "node": "synthesizer",
+            "message": f"Analyzing {len(chunks)} sources with {SYNTHESIS_MODEL}",
+            "detail": f"{len(words):,} words of research context",
+        },
+    )
     log.info("Calling Groq API for synthesis...")
     response = await _groq_client.chat.completions.create(
         model=SYNTHESIS_MODEL,
