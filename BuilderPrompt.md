@@ -295,7 +295,7 @@ npm run dev
 
 7. **LangGraph astream_events**: Use `version="v2"` in the call. Listen for `on_chain_start` events to emit progress, and `on_chain_end` on the `synthesizer` node to emit the final report.
 
-8. **Token length**: `qwen2.5:1.5b` has a 32K context window. Keep the synthesis prompt (context chunks + instruction) under ~6000 words regardless — this keeps generation fast and output focused. Limit to 12 chunks if needed.
+8. **Token length**: The project explicitly sets `num_ctx: 8192` for `qwen2.5:1.5b`. Keep the synthesis prompt (context chunks + instruction) under ~6000 words. Limit to 12 chunks if needed.
 
 9. **ChromaDB cosine similarity**: Pass `distance_metric="cosine"` when creating the collection to ensure semantic similarity (not Euclidean distance).
 
