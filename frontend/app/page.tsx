@@ -1,27 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import ResearchInput from "@/components/ResearchInput";
+import ResearchInput, { UserProfile, DEFAULT_PROFILE } from "@/components/ResearchInput";
 import ProgressStream from "@/components/ProgressStream";
 import ReportViewer from "@/components/ReportViewer";
 
 interface ProgressEvent {
   node: string;
   message: string;
+  detail?: string;
   timestamp: number;
+}
+
+interface Source {
+  index: number;
+  url: string;
+  title: string;
 }
 
 type Status = "idle" | "loading" | "done" | "error";
 
 export default function Home() {
-  const [query, setQuery] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [progressEvents, setProgressEvents] = useState<ProgressEvent[]>([]);
   const [report, setReport] = useState("");
+  const [sources, setSources] = useState<Source[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async () => {
-    if (!query.trim() || status === "loading") return;
+    if (!companyName.trim() || status === "loading") return;
 
     setStatus("loading");
     setProgressEvents([]);
@@ -32,7 +42,10 @@ export default function Home() {
       const resp = await fetch("http://localhost:8000/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim() }),
+        body: JSON.stringify({
+          company_name: companyName.trim(),
+          user_profile: profile,
+        }),
         cache: "no-store",
       });
 
@@ -61,10 +74,11 @@ export default function Home() {
             if (event.type === "progress") {
               setProgressEvents((prev) => [
                 ...prev,
-                { node: event.node, message: event.message, timestamp: Date.now() },
+                { node: event.node, message: event.message, detail: event.detail, timestamp: Date.now() },
               ]);
             } else if (event.type === "report") {
               setReport(event.content);
+              setSources(event.sources || []);
               setStatus("done");
             } else if (event.type === "error") {
               setErrorMsg(event.message);
@@ -84,24 +98,33 @@ export default function Home() {
   };
 
   const handleReset = () => {
-    setQuery("");
+    setCompanyName("");
     setStatus("idle");
     setProgressEvents([]);
     setReport("");
+    setSources([]);
     setErrorMsg("");
   };
 
   return (
     <main>
       <ResearchInput
-        query={query}
-        setQuery={setQuery}
+        companyName={companyName}
+        setCompanyName={setCompanyName}
+        profile={profile}
+        setProfile={setProfile}
+        profileOpen={profileOpen}
+        setProfileOpen={setProfileOpen}
         onSubmit={handleSubmit}
         loading={status === "loading"}
       />
 
       {(status === "loading" || progressEvents.length > 0) && status !== "done" && (
-        <ProgressStream events={progressEvents} />
+        <ProgressStream
+          events={progressEvents}
+          loading={status === "loading"}
+          companyName={companyName}
+        />
       )}
 
       {status === "error" && (
@@ -114,7 +137,7 @@ export default function Home() {
       )}
 
       {status === "done" && report && (
-        <ReportViewer report={report} onReset={handleReset} />
+        <ReportViewer report={report} sources={sources} onReset={handleReset} />
       )}
     </main>
   );

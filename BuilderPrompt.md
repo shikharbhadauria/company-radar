@@ -13,7 +13,7 @@ Build a full-stack local research system that replicates how Claude's Research f
 | Frontend | Next.js 14 (App Router, TypeScript) |
 | Backend | Python FastAPI |
 | Agentic orchestration | LangGraph |
-| LLM + embeddings | Ollama (`deepseek-r1:8b` + `nomic-embed-text`) |
+| LLM + embeddings | Ollama (`qwen2.5:1.5b` + `nomic-embed-text`) |
 | Web search | SearXNG (self-hosted via Docker) |
 | Web scraping | Playwright (Python) |
 | Vector store | ChromaDB (embedded, persists to disk) |
@@ -112,7 +112,7 @@ class ResearchState(TypedDict):
 **Nodes:**
 
 #### `planner` node (`backend/nodes/planner.py`)
-- Calls Ollama (`deepseek-r1:8b`) to decompose `original_query` into 3–5 specific sub-questions
+- Calls Ollama (`qwen2.5:1.5b`) to decompose `original_query` into 3–5 specific sub-questions
 - On iterations > 1, also receives `gaps` from previous synthesis and generates targeted follow-up queries
 - Prompt must instruct the model to return ONLY a valid JSON array of strings — no preamble, no markdown fences
 - Parse the response safely with a try/except fallback that splits on newlines if JSON fails
@@ -132,7 +132,7 @@ class ResearchState(TypedDict):
 - Embed `state["original_query"]` using `nomic-embed-text`
 - Query ChromaDB for top 15 most similar chunks (cosine similarity)
 - Build a context string: each chunk prefixed with `[N] (url)\n{chunk_text}`
-- Call Ollama (`deepseek-r1:8b`) with a prompt that:
+- Call Ollama (`qwen2.5:1.5b`) with a prompt that:
   - States the original query
   - Provides all 15 context chunks
   - Instructs to write a structured markdown report
@@ -255,7 +255,7 @@ Include clear setup instructions:
 ## Setup
 
 # 1. Pull Ollama models
-ollama pull deepseek-r1:8b
+ollama pull qwen2.5:1.5b
 ollama pull nomic-embed-text
 
 # 2. Start SearXNG
@@ -289,13 +289,13 @@ npm run dev
 
 4. **Playwright scraping** will fail on some sites (bot detection, paywalls). Always catch exceptions and continue — don't let one failed scrape crash the entire search_embed node.
 
-5. **deepseek-r1:8b** wraps its reasoning in `<think>...</think>` tags before answering. Strip everything inside those tags from the model output before parsing or displaying.
+5. **qwen2.5:1.5b** is a compact model — keep prompts concise to stay within its context window and ensure clean structured outputs (JSON arrays, markdown).
 
 6. **SSE in Next.js**: Use `fetch` with `{ cache: 'no-store' }` and manually parse the stream. Do NOT use EventSource — it doesn't support POST requests.
 
 7. **LangGraph astream_events**: Use `version="v2"` in the call. Listen for `on_chain_start` events to emit progress, and `on_chain_end` on the `synthesizer` node to emit the final report.
 
-8. **Token length**: `deepseek-r1:8b` has an 8K context window by default in Ollama. Keep the synthesis prompt (context chunks + instruction) under ~6000 words. Limit to 12 chunks if needed.
+8. **Token length**: The project explicitly sets `num_ctx: 8192` for `qwen2.5:1.5b`. Keep the synthesis prompt (context chunks + instruction) under ~6000 words. Limit to 12 chunks if needed.
 
 9. **ChromaDB cosine similarity**: Pass `distance_metric="cosine"` when creating the collection to ensure semantic similarity (not Euclidean distance).
 

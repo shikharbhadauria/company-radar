@@ -7,12 +7,15 @@ from nodes.synthesizer import synthesizer
 
 class ResearchState(TypedDict):
     original_query: str
+    company_name: str
+    user_profile: dict
     session_id: str
     sub_queries: List[str]
     collected_chunks: List[dict]
     iteration: int
     gaps: List[str]
     final_report: str
+    sources: List[dict]
 
 
 def should_continue(state: ResearchState) -> str:
