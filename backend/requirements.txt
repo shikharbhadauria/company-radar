@@ -3,7 +3,7 @@ uvicorn[standard]
 langgraph
 langchain-core
 chromadb
-ollama
+fastembed
 groq
 playwright
 requests

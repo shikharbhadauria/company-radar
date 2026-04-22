@@ -1,14 +1,12 @@
 import hashlib
 import logging
 import requests
-import ollama
 from urllib.parse import urlparse
-from config import EMBED_MODEL
 from typing import TYPE_CHECKING
 from langchain_core.callbacks.manager import adispatch_custom_event
 
 log = logging.getLogger("search_embed")
-_client = ollama.AsyncClient()
+from utils.embedder import embed
 from utils.scraper import scrape_urls
 from utils.chunker import chunk_text
 from utils.chroma_client import add_chunk
@@ -36,6 +34,7 @@ PREFERRED_DOMAINS = {
     "glassdoor.com", "glassdoor.co.in",
     "ambitionbox.com",
     "reddit.com",
+    "teamblind.com", "blind.com",
     "linkedin.com",
     "crunchbase.com",
     "tracxn.com",
@@ -82,6 +81,47 @@ def _is_relevant(text: str, company_name: str) -> bool:
     return any(word in text_lower for word in words)
 
 
+def _search_duckduckgo(query: str) -> list[dict]:
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; CompanyRadar/1.0)"}
+        resp = requests.get(
+            "https://html.duckduckgo.com/html/",
+            params={"q": query},
+            headers=headers,
+            timeout=10,
+        )
+        from html.parser import HTMLParser
+
+        class DDGParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.results = []
+                self._current_url = ""
+                self._capture = False
+
+            def handle_starttag(self, tag, attrs):
+                attrs_dict = dict(attrs)
+                if tag == "a" and "result__a" in attrs_dict.get("class", ""):
+                    self._current_url = attrs_dict.get("href", "")
+                    self._capture = True
+
+            def handle_data(self, data):
+                if self._capture and self._current_url:
+                    self.results.append({"url": self._current_url, "title": data.strip()})
+                    self._capture = False
+                    self._current_url = ""
+
+            def handle_endtag(self, tag):
+                if tag == "a":
+                    self._capture = False
+
+        parser = DDGParser()
+        parser.feed(resp.text)
+        return parser.results[:MAX_RESULTS_PER_QUERY]
+    except Exception:
+        return []
+
+
 def search_web(query: str) -> list[dict]:
     try:
         params = {
@@ -92,9 +132,13 @@ def search_web(query: str) -> list[dict]:
         resp = requests.get(SEARXNG_URL, params=params, timeout=10)
         data = resp.json()
         results = data.get("results", [])[:MAX_RESULTS_PER_QUERY]
-        return [{"url": r.get("url", ""), "title": r.get("title", "")} for r in results if r.get("url")]
+        if results:
+            return [{"url": r.get("url", ""), "title": r.get("title", "")} for r in results if r.get("url")]
     except Exception:
-        return []
+        pass
+
+    log.warning("SearXNG unavailable or returned no results — falling back to DuckDuckGo")
+    return _search_duckduckgo(query)
 
 
 async def search_embed(state: "ResearchState") -> "ResearchState":
@@ -109,7 +153,7 @@ async def search_embed(state: "ResearchState") -> "ResearchState":
         log.info(f"Searching: {query!r}")
         await adispatch_custom_event("progress", {
             "node": "search_embed",
-            "message": f"Query {q_idx}/{len(sub_queries)}: searching the web",
+            "message": f"Searching ({q_idx}/{len(sub_queries)})",
             "detail": query,
         })
 
@@ -133,14 +177,16 @@ async def search_embed(state: "ResearchState") -> "ResearchState":
         await adispatch_custom_event("progress", {
             "node": "search_embed",
             "message": f"Scraping {len(urls)} pages",
-            "detail": ", ".join(_get_domain(u) for u in urls[:4]),
+            "detail": ", ".join(_get_domain(u) for u in urls[:5]),
         })
 
         log.info(f"  Scraping {len(urls)} URLs...")
-        scraped_texts = await scrape_urls(urls)
+        scraped = await scrape_urls(urls)
 
         embedded_count = 0
-        for url, text in zip(urls, scraped_texts):
+        for url, page_data in zip(urls, scraped):
+            text = page_data["text"]
+            published_date = page_data["date"]
             existing_urls.add(url)
             if not text:
                 log.info(f"  Skipped (empty): {url}")
@@ -158,14 +204,14 @@ async def search_embed(state: "ResearchState") -> "ResearchState":
             for i, chunk in enumerate(chunks):
                 chunk_id = hashlib.md5(f"{url}_{i}".encode()).hexdigest()
                 try:
-                    embedding_resp = await _client.embeddings(model=EMBED_MODEL, prompt=chunk)
-                    embedding = embedding_resp["embedding"]
+                    embedding = await embed(chunk)
 
                     metadata = {
                         "url": url,
                         "title": title,
                         "query": query,
                         "iteration": iteration,
+                        "published_date": published_date,
                     }
 
                     add_chunk(session_id, chunk, embedding, metadata, chunk_id)

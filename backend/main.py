@@ -3,7 +3,6 @@ import os
 import sys
 import asyncio
 import logging
-import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
@@ -29,30 +28,16 @@ app.add_middleware(
 )
 
 
-def check_ollama():
-    try:
-        resp = requests.get("http://localhost:11434/api/tags", timeout=5)
-        if resp.status_code == 200:
-            return True
-    except Exception:
-        pass
-    return False
-
-
 @app.on_event("startup")
 def startup_check():
-    if not check_ollama():
-        print(
-            "ERROR: Ollama is not running or unreachable at http://localhost:11434. "
-            "Please start Ollama before running the backend.",
-            file=sys.stderr,
-        )
     if not os.environ.get("GROQ_API_KEY"):
         print(
             "ERROR: GROQ_API_KEY is not set. "
             "Please set it in your environment or .env file before running the backend.",
             file=sys.stderr,
         )
+    from utils.chroma_client import cleanup_old_collections
+    cleanup_old_collections()
 
 
 class UserProfile(BaseModel):

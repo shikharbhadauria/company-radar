@@ -1,0 +1,100 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Add Indian-specific sources to planner",
+      "category": "research",
+      "status": "completed",
+      "description": "Add TeamBlind, Levels.fyi, and Naukri to the planner's query generation alongside existing Glassdoor, AmbitionBox, Reddit. Bump initial query count from 9 to 11.",
+      "files": ["backend/nodes/planner.py"]
+    },
+    {
+      "id": 2,
+      "title": "Replace Ollama embeddings with fastembed",
+      "category": "architecture",
+      "status": "completed",
+      "description": "Swap ollama.AsyncClient embeddings for fastembed (pure Python, no server needed). Eliminates the Ollama-must-be-running requirement entirely since it's only used for embeddings.",
+      "files": [
+        "backend/nodes/synthesizer.py",
+        "backend/nodes/search_embed.py",
+        "backend/requirements.txt"
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Add data freshness to sources",
+      "category": "research",
+      "status": "completed",
+      "description": "Extract and store publish/update date of each scraped page. Surface a date range like 'sources from 2024–25' in the report so users can judge recency.",
+      "files": [
+        "backend/nodes/search_embed.py",
+        "backend/nodes/synthesizer.py"
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Show confidence indicator in report",
+      "category": "research",
+      "status": "completed",
+      "description": "Add 'Based on X sources across Y search iterations' to the report header so users know how much data backs the verdict.",
+      "files": ["backend/nodes/synthesizer.py"]
+    },
+    {
+      "id": 5,
+      "title": "Detailed progress messages during search",
+      "category": "ux",
+      "status": "completed",
+      "description": "Instead of generic node names, emit what's actually being searched — e.g. 'Searching glassdoor.co.in for napses technologies salary'. Stream these via the existing SSE progress events.",
+      "files": [
+        "backend/nodes/search_embed.py",
+        "backend/nodes/planner.py"
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Vitals color coding",
+      "category": "ui",
+      "status": "completed",
+      "description": "Color-code the Glassdoor rating vital: green >3.8, yellow 3.0–3.8, red <3.0. Parse the rating value out of the vitals and apply the color to the vitalValue span.",
+      "files": ["frontend/components/ReportViewer.tsx"]
+    },
+    {
+      "id": 7,
+      "title": "Report history via localStorage",
+      "category": "ui",
+      "status": "completed",
+      "description": "Save each completed report to localStorage keyed by company name + timestamp. Show a collapsible history panel so users can revisit past reports without re-running.",
+      "files": [
+        "frontend/components/ReportViewer.tsx",
+        "frontend/app/page.tsx"
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Fix mobile layout",
+      "category": "ui",
+      "status": "completed",
+      "description": "Audit and fix responsive layout below 400px. Vitals row, flags grid, and header are likely broken on small screens.",
+      "files": ["frontend/components/ReportViewer.tsx"]
+    },
+    {
+      "id": 9,
+      "title": "ChromaDB session cleanup on startup",
+      "category": "architecture",
+      "status": "completed",
+      "description": "On backend startup, delete ChromaDB collections older than 7 days to prevent unbounded disk growth. Each research session creates a new collection that is never cleaned up.",
+      "files": [
+        "backend/main.py",
+        "backend/utils/chroma_client.py"
+      ]
+    },
+    {
+      "id": 10,
+      "title": "SearXNG fallback to DuckDuckGo",
+      "category": "architecture",
+      "status": "completed",
+      "description": "If SearXNG returns zero results or is unreachable, fall back to DuckDuckGo HTML scraping so the app doesn't silently fail when Docker isn't running.",
+      "files": ["backend/nodes/search_embed.py"]
+    }
+  ]
+}

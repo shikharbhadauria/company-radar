@@ -3,14 +3,13 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-import ollama
-from config import EMBED_MODEL, SYNTHESIS_MODEL
+from config import SYNTHESIS_MODEL
 from groq import AsyncGroq
 from langchain_core.callbacks.manager import adispatch_custom_event
 from utils.chroma_client import query_chunks
+from utils.embedder import embed
 
 log = logging.getLogger("synthesizer")
-_ollama_client = ollama.AsyncClient()
 _groq_client = AsyncGroq()
 
 if TYPE_CHECKING:
@@ -25,7 +24,7 @@ OUTPUT FORMAT (follow exactly):
 **What this company actually is** (3-4 lines — cut through the marketing, describe what they really do and how they make money)
 
 **Company vitals**
-Size | Funding | Revenue | Glassdoor rating | Dev salaries (INR) | Remote policy
+Size: [value] | Funding: [value] | Revenue: [value] | Glassdoor rating: [value] | Dev salaries (INR): [value] | Remote policy: [value]
 
 ---
 
@@ -65,10 +64,7 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
     session_id = state["session_id"]
 
     log.info("Embedding query for retrieval...")
-    embedding_resp = await _ollama_client.embeddings(
-        model=EMBED_MODEL, prompt=original_query
-    )
-    query_embedding = embedding_resp["embedding"]
+    query_embedding = await embed(original_query)
 
     chunks = query_chunks(session_id, query_embedding, n_results=20)
     log.info(f"Retrieved {len(chunks)} chunks from ChromaDB")
@@ -93,19 +89,32 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
     context_parts = []
     sources = []
     seen_urls: set = set()
+    dates = []
     for i, chunk in enumerate(chunks, 1):
         url = chunk["metadata"].get("url", "")
         title = chunk["metadata"].get("title", "") or url
+        published_date = chunk["metadata"].get("published_date", "")
         context_parts.append(f"[{i}] ({url})\n{chunk['text']}")
         if url and url not in seen_urls:
             seen_urls.add(url)
             sources.append({"index": i, "url": url, "title": title})
+        if published_date:
+            dates.append(published_date[:4])  # keep year only
 
     context = "\n\n---\n\n".join(context_parts)
 
     words = context.split()
     if len(words) > 5000:
         context = " ".join(words[:5000])
+
+    date_range = ""
+    if dates:
+        years = sorted(set(dates))
+        date_range = f"{years[0]}–{years[-1]}" if len(years) > 1 else years[0]
+        date_range = f"\nSOURCE DATE RANGE: {date_range} (based on {len(dates)} dated sources)"
+
+    iteration = state.get("iteration", 1)
+    confidence_note = f"Based on {len(seen_urls)} sources across {iteration} search iteration{'s' if iteration > 1 else ''}."
 
     user_message = f"""Analyze "{company_name}" as a potential employer for this candidate:
 
@@ -114,11 +123,11 @@ CANDIDATE PROFILE:
 - Target: {target}
 - Leaving because: {reason_leaving}
 - Priorities in order: {priorities_str}
-
+{date_range}
 RESEARCH SOURCES:
 {context}
 
-Write the company intelligence report in the exact format specified. Replace {{company_name}} in the template with "{company_name}"."""
+Write the company intelligence report in the exact format specified. Replace {{company_name}} in the template with "{company_name}". On the line immediately after the ## heading, add this exact line: _{confidence_note}_"""
 
     await adispatch_custom_event(
         "progress",

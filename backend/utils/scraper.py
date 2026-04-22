@@ -27,7 +27,30 @@ def _is_review_domain(url: str) -> bool:
         return False
 
 
-async def _scrape_one(page, url: str) -> str:
+_DATE_META_JS = """
+() => {
+    const selectors = [
+        'meta[property="article:published_time"]',
+        'meta[property="og:updated_time"]',
+        'meta[name="date"]',
+        'meta[name="pubdate"]',
+        'meta[name="publish-date"]',
+        'meta[itemprop="datePublished"]',
+        'time[datetime]',
+    ];
+    for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el) {
+            const val = el.getAttribute('content') || el.getAttribute('datetime') || '';
+            if (val) return val.slice(0, 10);
+        }
+    }
+    return '';
+}
+"""
+
+
+async def _scrape_one(page, url: str) -> dict:
     log.info(f"  Scraping: {url}")
     is_review = _is_review_domain(url)
     try:
@@ -38,26 +61,26 @@ async def _scrape_one(page, url: str) -> str:
         )
 
         if is_review:
-            # Extra wait for lazy-loaded JS content (ratings, reviews, salaries)
             await page.wait_for_timeout(2000)
 
         text = await page.evaluate("document.body.innerText")
+        date = await page.evaluate(_DATE_META_JS)
+
         lines = text.split("\n")
-        # Lower threshold to 15 chars — captures short but valuable data like "3.2 ★" or "₹4.5L"
         cleaned = [line.strip() for line in lines if len(line.strip()) >= 15]
         result = "\n".join(cleaned)[:9000]
-        log.info(f"  OK ({len(result)} chars): {url}")
-        return result
+        log.info(f"  OK ({len(result)} chars, date={date or 'unknown'}): {url}")
+        return {"text": result, "date": date}
     except Exception as e:
         log.warning(f"  FAILED ({e}): {url}")
-        return ""
+        return {"text": "", "date": ""}
 
 
-async def scrape_urls(urls: list[str]) -> list[str]:
+async def scrape_urls(urls: list[str]) -> list[dict]:
     if not urls:
         return []
 
-    results = [""] * len(urls)
+    results: list[dict] = [{"text": "", "date": ""}] * len(urls)
     sem = asyncio.Semaphore(CONCURRENCY)
 
     async def bounded(i, url):
