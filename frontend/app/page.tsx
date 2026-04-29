@@ -140,7 +140,7 @@ export default function Home() {
     setErrorMsg("");
 
     try {
-      const resp = await fetch("http://localhost:8000/research", {
+      const resp = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -155,6 +155,7 @@ export default function Home() {
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let resolved = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -190,9 +191,11 @@ export default function Home() {
               setReport(event.content);
               setSources(event.sources || []);
               setStatus("done");
+              resolved = true;
             } else if (event.type === "error") {
               setErrorMsg(event.message);
               setStatus("error");
+              resolved = true;
             }
           } catch {
             // skip malformed JSON
@@ -200,7 +203,7 @@ export default function Home() {
         }
       }
 
-      if (status === "loading") setStatus("done");
+      if (!resolved) setStatus("done");
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
