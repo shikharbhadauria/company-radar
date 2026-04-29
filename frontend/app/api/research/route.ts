@@ -3,7 +3,9 @@ import { NextRequest } from "next/server";
 export async function POST(req: NextRequest) {
   const body = await req.json();
 
-  const upstream = await fetch("http://localhost:8000/research", {
+  const backendUrl = process.env.BACKEND_URL;
+  if (!backendUrl) throw new Error("BACKEND_URL env var is required");
+  const upstream = await fetch(`${backendUrl}/research`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

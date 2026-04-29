@@ -1,8 +1,9 @@
+import asyncio
 import json
+import logging
 import os
 import sys
-import asyncio
-import logging
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
@@ -20,9 +21,14 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
+_origins_env = os.environ.get("ALLOWED_ORIGINS")
+if not _origins_env:
+    raise RuntimeError("ALLOWED_ORIGINS env var is required")
+_allowed_origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -37,6 +43,7 @@ def startup_check():
             file=sys.stderr,
         )
     from utils.chroma_client import cleanup_old_collections
+
     cleanup_old_collections()
 
 
@@ -57,10 +64,11 @@ def sse_event(data: dict) -> str:
 
 
 async def run_research(company_name: str, user_profile: dict):
+    import uuid
+
     from graph import research_graph
     from utils.chroma_client import get_collection
 
-    import uuid
     session_id = uuid.uuid4().hex[:8]
     get_collection(session_id)
     log.info(f"[{session_id}] Starting company analysis: {company_name!r}")
@@ -98,12 +106,14 @@ async def run_research(company_name: str, user_profile: dict):
 
             if kind == "on_chain_start" and name in node_labels:
                 log.info(f"[{session_id}] NODE START: {name}")
-                yield sse_event({
-                    "type": "progress",
-                    "node": name,
-                    "message": node_labels[name],
-                    "detail": "",
-                })
+                yield sse_event(
+                    {
+                        "type": "progress",
+                        "node": name,
+                        "message": node_labels[name],
+                        "detail": "",
+                    }
+                )
                 await asyncio.sleep(0)
 
             elif kind == "on_chain_end" and name in node_labels:
@@ -115,17 +125,23 @@ async def run_research(company_name: str, user_profile: dict):
 
             elif kind == "on_custom_event" and name == "progress":
                 data = event.get("data", {})
-                yield sse_event({
-                    "type": "progress",
-                    "node": data.get("node", ""),
-                    "message": data.get("message", ""),
-                    "detail": data.get("detail", ""),
-                })
+                yield sse_event(
+                    {
+                        "type": "progress",
+                        "node": data.get("node", ""),
+                        "message": data.get("message", ""),
+                        "detail": data.get("detail", ""),
+                    }
+                )
                 await asyncio.sleep(0)
 
         if last_report:
-            log.info(f"[{session_id}] Report ready ({len(last_report)} chars), emitting once")
-            yield sse_event({"type": "report", "content": last_report, "sources": last_sources})
+            log.info(
+                f"[{session_id}] Report ready ({len(last_report)} chars), emitting once"
+            )
+            yield sse_event(
+                {"type": "report", "content": last_report, "sources": last_sources}
+            )
 
     except Exception as e:
         log.exception(f"[{session_id}] Research failed: {e}")
@@ -135,7 +151,9 @@ async def run_research(company_name: str, user_profile: dict):
 @app.post("/research")
 async def research(req: ResearchRequest):
     async def stream():
-        async for chunk in run_research(req.company_name, req.user_profile.model_dump()):
+        async for chunk in run_research(
+            req.company_name, req.user_profile.model_dump()
+        ):
             yield chunk
 
     return StreamingResponse(

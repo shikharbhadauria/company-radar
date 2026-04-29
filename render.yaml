@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: company-radar-searxng
+    runtime: docker
+    dockerfilePath: ./searxng/Dockerfile
+    dockerContext: ./searxng
+    envVars:
+      - key: SEARXNG_SECRET_KEY
+        generateValue: true
+      - key: SEARXNG_BASE_URL
+        sync: false   # set to https://company-radar-searxng.onrender.com
+
+  - type: web
+    name: company-radar-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: >
+      pip install -r requirements.txt &&
+      playwright install chromium &&
+      playwright install-deps chromium
+    startCommand: uvicorn main:server --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SEARXNG_URL
+        sync: false   # set to https://company-radar-searxng.onrender.com/search
+      - key: ALLOWED_ORIGINS
+        sync: false   # set to https://your-app.vercel.app

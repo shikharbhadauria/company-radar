@@ -14,7 +14,10 @@ from utils.chroma_client import add_chunk
 if TYPE_CHECKING:
     from graph import ResearchState
 
-SEARXNG_URL = "http://localhost:8080/search"
+import os
+SEARXNG_URL = os.environ.get("SEARXNG_URL")
+if not SEARXNG_URL:
+    raise RuntimeError("SEARXNG_URL env var is required")
 MAX_RESULTS_PER_QUERY = 8
 MAX_CHUNKS_PER_PAGE = 4
 
