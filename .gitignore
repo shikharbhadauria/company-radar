@@ -22,3 +22,9 @@ frontend/out/
 # OS
 .DS_Store
 Thumbs.db
+
+# Ignore all .env files
+.env*
+
+# Except for .env.example
+!.env.example
