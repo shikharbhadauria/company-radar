@@ -1,10 +1,18 @@
 services:
   - type: web
     name: company-radar-searxng
-    runtime: docker
-    dockerfilePath: ./searxng/Dockerfile
-    dockerContext: ./searxng
+    runtime: python
+    # pip install of SearXNG fails due to a setup.py bug (imports msgspec before it's installed).
+    # Workaround: clone the repo, install deps from requirements.txt, then run via PYTHONPATH.
+    buildCommand: >
+      git clone --depth 1 https://github.com/searxng/searxng.git .searxng-src &&
+      pip install -r .searxng-src/requirements.txt gunicorn
+    startCommand: gunicorn searx.webapp:application --bind 0.0.0.0:$PORT --timeout 60 --workers 2
     envVars:
+      - key: PYTHONPATH
+        value: .searxng-src
+      - key: SEARXNG_SETTINGS_PATH
+        value: ./searxng/settings.yml
       - key: SEARXNG_SECRET_KEY
         generateValue: true
       - key: SEARXNG_BASE_URL

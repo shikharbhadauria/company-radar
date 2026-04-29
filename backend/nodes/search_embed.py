@@ -132,7 +132,8 @@ def search_web(query: str) -> list[dict]:
             "format": "json",
             "engines": "google,bing,duckduckgo",
         }
-        resp = requests.get(SEARXNG_URL, params=params, timeout=10)
+        resp = requests.get(SEARXNG_URL, params=params, timeout=10,
+                            headers={"X-Forwarded-For": "127.0.0.1"})
         data = resp.json()
         results = data.get("results", [])[:MAX_RESULTS_PER_QUERY]
         if results:

@@ -13,8 +13,11 @@ frontend/.next/
 frontend/out/
 .env.local
 
-# SearXNG runtime
-searxng/uwsgi.ini
+# SearXNG build cache (cloned during Render build)
+.searxng-src/
+
+# IDE
+.ropeproject/
 
 # OS
 .DS_Store
