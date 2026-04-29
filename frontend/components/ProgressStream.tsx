@@ -181,10 +181,17 @@ export default function ProgressStream({ events, loading, companyName }: Props) 
         }
       `}</style>
 
+      <style>{`
+        @media (max-width: 480px) {
+          .ps-card { flex-direction: column !important; align-items: center !important; padding: 16px !important; }
+          .ps-radar { display: none !important; }
+        }
+      `}</style>
+
       {/* Main card */}
-      <div style={s.card}>
+      <div style={s.card} className="ps-card">
         {/* Left: Radar */}
-        <div style={s.radarCol}>
+        <div style={s.radarCol} className="ps-radar">
           <Radar active={loading} blipCount={blipCount} />
           <div style={s.radarLabel}>
             {loading ? (

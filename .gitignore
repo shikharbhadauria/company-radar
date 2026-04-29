@@ -11,6 +11,7 @@ backend/chroma_data/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+.env.local
 
 # SearXNG runtime
 searxng/uwsgi.ini

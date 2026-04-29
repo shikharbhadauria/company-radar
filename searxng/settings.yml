@@ -1,9 +1,11 @@
 use_default_settings: true
 
 server:
-  secret_key: "local-research-secret-key-change-me"
+  # Overridden by SEARXNG_SECRET_KEY env var in production
+  secret_key: "local-dev-secret-key-change-in-prod"
   bind_address: "0.0.0.0"
   port: 8080
+  # Overridden by SEARXNG_BASE_URL env var in production
   base_url: "http://localhost:8080"
 
 search:

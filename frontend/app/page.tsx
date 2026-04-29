@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ResearchInput, { UserProfile, DEFAULT_PROFILE } from "@/components/ResearchInput";
 import ProgressStream from "@/components/ProgressStream";
 import ReportViewer from "@/components/ReportViewer";
@@ -18,7 +18,103 @@ interface Source {
   title: string;
 }
 
+interface HistoryEntry {
+  id: string;
+  companyName: string;
+  timestamp: number;
+  report: string;
+  sources: Source[];
+}
+
 type Status = "idle" | "loading" | "done" | "error";
+
+const HISTORY_KEY = "company_radar_history";
+const MAX_HISTORY = 10;
+
+function loadHistory(): HistoryEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveToHistory(entry: HistoryEntry) {
+  const existing = loadHistory().filter((e) => e.id !== entry.id);
+  const updated = [entry, ...existing].slice(0, MAX_HISTORY);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+}
+
+function HistoryPanel({
+  history,
+  onLoad,
+  onClear,
+}: {
+  history: HistoryEntry[];
+  onLoad: (entry: HistoryEntry) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (history.length === 0) return null;
+
+  return (
+    <div style={hp.wrap}>
+      <button style={hp.toggle} onClick={() => setOpen(!open)}>
+        <span style={hp.arrow}>{open ? "▼" : "▶"}</span>
+        History ({history.length})
+        <span style={hp.clear} onClick={(e) => { e.stopPropagation(); onClear(); }}>
+          Clear
+        </span>
+      </button>
+      {open && (
+        <div style={hp.list}>
+          {history.map((entry) => (
+            <button key={entry.id} style={hp.item} onClick={() => onLoad(entry)}>
+              <span style={hp.name}>{entry.companyName}</span>
+              <span style={hp.date}>
+                {new Date(entry.timestamp).toLocaleDateString("en-IN", {
+                  day: "numeric", month: "short", year: "numeric",
+                })}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const hp: Record<string, React.CSSProperties> = {
+  wrap: {
+    maxWidth: 800, margin: "0 auto 16px", padding: "0 24px",
+  },
+  toggle: {
+    display: "flex", alignItems: "center", gap: 8, width: "100%",
+    padding: "10px 16px", background: "#1a1a2e",
+    border: "1px solid #2d2d3d", borderRadius: 8,
+    color: "#6b7280", fontSize: 13, fontWeight: 600,
+    cursor: "pointer", textAlign: "left",
+  },
+  arrow: { fontSize: 9, color: "#4b5563" },
+  clear: {
+    marginLeft: "auto", fontSize: 12, color: "#4b5563",
+    padding: "2px 8px", borderRadius: 4,
+    border: "1px solid #2d2d3d",
+  },
+  list: {
+    marginTop: 4, display: "flex", flexDirection: "column", gap: 2,
+    background: "#13131f", borderRadius: 8,
+    border: "1px solid #2d2d3d", overflow: "hidden",
+  },
+  item: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "10px 16px", background: "transparent",
+    border: "none", borderBottom: "1px solid #1f1f30",
+    cursor: "pointer", textAlign: "left", gap: 12,
+  },
+  name: { fontSize: 13, color: "#d1d5db", fontWeight: 500 },
+  date: { fontSize: 12, color: "#4b5563", flexShrink: 0 },
+};
 
 export default function Home() {
   const [companyName, setCompanyName] = useState("");
@@ -29,6 +125,11 @@ export default function Home() {
   const [report, setReport] = useState("");
   const [sources, setSources] = useState<Source[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+
+  useEffect(() => {
+    setHistory(loadHistory());
+  }, []);
 
   const handleSubmit = async () => {
     if (!companyName.trim() || status === "loading") return;
@@ -77,6 +178,15 @@ export default function Home() {
                 { node: event.node, message: event.message, detail: event.detail, timestamp: Date.now() },
               ]);
             } else if (event.type === "report") {
+              const entry: HistoryEntry = {
+                id: `${Date.now()}`,
+                companyName: companyName.trim(),
+                timestamp: Date.now(),
+                report: event.content,
+                sources: event.sources || [],
+              };
+              saveToHistory(entry);
+              setHistory(loadHistory());
               setReport(event.content);
               setSources(event.sources || []);
               setStatus("done");
@@ -106,6 +216,20 @@ export default function Home() {
     setErrorMsg("");
   };
 
+  const handleLoadHistory = (entry: HistoryEntry) => {
+    setCompanyName(entry.companyName);
+    setReport(entry.report);
+    setSources(entry.sources);
+    setStatus("done");
+    setProgressEvents([]);
+    setErrorMsg("");
+  };
+
+  const handleClearHistory = () => {
+    localStorage.removeItem(HISTORY_KEY);
+    setHistory([]);
+  };
+
   return (
     <main>
       <ResearchInput
@@ -117,6 +241,12 @@ export default function Home() {
         setProfileOpen={setProfileOpen}
         onSubmit={handleSubmit}
         loading={status === "loading"}
+      />
+
+      <HistoryPanel
+        history={history}
+        onLoad={handleLoadHistory}
+        onClear={handleClearHistory}
       />
 
       {(status === "loading" || progressEvents.length > 0) && status !== "done" && (

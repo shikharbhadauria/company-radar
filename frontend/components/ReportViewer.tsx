@@ -17,6 +17,7 @@ interface Flag {
 
 interface ParsedReport {
   companyName: string;
+  confidence: string;
   description: string;
   vitals: { label: string; value: string }[];
   greenFlags: Flag[];
@@ -46,6 +47,16 @@ function parseFlags(section: string): Flag[] {
   return flags;
 }
 
+function glassdoorColor(label: string, value: string): string | undefined {
+  if (!label.toLowerCase().includes("glassdoor")) return undefined;
+  const match = value.match(/(\d+(\.\d+)?)/);
+  if (!match) return undefined;
+  const rating = parseFloat(match[1]);
+  if (rating >= 3.8) return "#4ade80";
+  if (rating >= 3.0) return "#fbbf24";
+  return "#f87171";
+}
+
 function parseVitals(raw: string): { label: string; value: string }[] {
   return raw
     .split("|")
@@ -64,6 +75,8 @@ function parseReport(markdown: string): ParsedReport | null {
   const nameMatch = markdown.match(/^##\s+(.+)$/m);
   if (!nameMatch) return null;
 
+  const confidenceMatch = markdown.match(/^##[^\n]+\n+_([^_]+)_/m);
+
   const descMatch = markdown.match(
     /\*\*What this company actually is\*\*[^\n]*\n+([\s\S]*?)\n*\*\*Company vitals\*\*/
   );
@@ -79,6 +92,7 @@ function parseReport(markdown: string): ParsedReport | null {
 
   return {
     companyName: nameMatch[1].trim(),
+    confidence: confidenceMatch ? confidenceMatch[1].trim() : "",
     description: descMatch ? descMatch[1].trim() : "",
     vitals: vitalsLineMatch ? parseVitals(vitalsLineMatch[1]) : [],
     greenFlags: greenSection ? parseFlags(greenSection[1]) : [],
@@ -105,6 +119,19 @@ export default function ReportViewer({ report, sources, onReset }: Props) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const parsed = parseReport(report);
 
+  const mobileStyles = `
+    @media (max-width: 480px) {
+      .rv-container { padding: 0 12px !important; }
+      .rv-header { padding: 20px 16px 16px !important; }
+      .rv-company-name { font-size: 22px !important; }
+      .rv-flags-grid { grid-template-columns: 1fr !important; }
+      .rv-toolbar { flex-direction: column !important; align-items: flex-start !important; }
+      .rv-vitals { gap: 6px !important; }
+      .rv-vital-item { padding: 6px 10px !important; }
+      .rv-verdict { padding: 16px 18px !important; }
+    }
+  `;
+
   const handleCopy = async () => {
     await navigator.clipboard.writeText(report);
     setCopied(true);
@@ -125,35 +152,47 @@ export default function ReportViewer({ report, sources, onReset }: Props) {
   const verdictColors = parsed.verdictType ? VERDICT_COLORS[parsed.verdictType] : null;
 
   return (
-    <div style={s.container}>
+    <div style={s.container} className="rv-container">
+      <style>{mobileStyles}</style>
       <Toolbar copied={copied} onCopy={handleCopy} onReset={onReset} />
 
       {/* Header */}
-      <div style={s.header}>
+      <div style={s.header} className="rv-header">
         <div style={s.headerTop}>
-          <h1 style={s.companyName}>{parsed.companyName}</h1>
+          <h1 style={s.companyName} className="rv-company-name">{parsed.companyName}</h1>
           {parsed.verdictType && verdictColors && (
             <span style={{ ...s.verdictBadge, background: verdictColors.badge }}>
               {parsed.verdictType}
             </span>
           )}
         </div>
+        {parsed.confidence && (
+          <p style={s.confidence}>{parsed.confidence}</p>
+        )}
         {parsed.description && <p style={s.description}>{parsed.description}</p>}
         {parsed.vitals.length > 0 && (
-          <div style={s.vitalsGrid}>
-            {parsed.vitals.map((v, i) => (
-              <div key={i} style={s.vitalItem}>
-                {v.label && <span style={s.vitalLabel}>{v.label}</span>}
-                <span style={s.vitalValue}>{v.value}</span>
-              </div>
-            ))}
+          <div style={s.vitalsGrid} className="rv-vitals">
+            {parsed.vitals.map((v, i) => {
+              const accentColor = glassdoorColor(v.label, v.value);
+              return (
+                <div key={i} className="rv-vital-item" style={{
+                  ...s.vitalItem,
+                  ...(accentColor ? { borderColor: `${accentColor}40` } : {}),
+                }}>
+                  {v.label && <span style={s.vitalLabel}>{v.label}</span>}
+                  <span style={{ ...s.vitalValue, ...(accentColor ? { color: accentColor } : {}) }}>
+                    {v.value}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
       {/* Flags */}
       {(parsed.greenFlags.length > 0 || parsed.redFlags.length > 0) && (
-        <div style={s.flagsGrid}>
+        <div style={s.flagsGrid} className="rv-flags-grid">
           {parsed.greenFlags.length > 0 && (
             <div style={{ ...s.flagSection, borderColor: "#166534" }}>
               <h3 style={{ ...s.flagHeading, color: "#4ade80" }}>
@@ -318,6 +357,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
     color: "#fff", letterSpacing: "0.05em",
   },
+  confidence: { color: "#4b5563", fontSize: 12, marginBottom: 8, marginTop: -4 },
   description: { color: "#9ca3af", fontSize: 14, lineHeight: 1.7, marginBottom: 20 },
   vitalsGrid: {
     display: "flex", flexWrap: "wrap", gap: 8,
