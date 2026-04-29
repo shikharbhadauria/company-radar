@@ -47,24 +47,13 @@ jobs:
         run: npx tsc --noEmit
         working-directory: frontend
 
-  deploy-searxng:
-    name: Deploy SearXNG to Fly.io
+  deploy:
+    name: Deploy to Render
     needs: [check-backend, check-frontend]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy
-        run: flyctl deploy --remote-only --config searxng/fly.toml
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-  deploy-backend:
-    name: Deploy backend to Render
-    needs: [check-backend, check-frontend]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Deploy
+      - name: Deploy SearXNG
+        run: curl -f -X POST "${{ secrets.RENDER_SEARXNG_DEPLOY_HOOK }}"
+      - name: Deploy backend
         run: curl -f -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"

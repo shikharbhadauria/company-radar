@@ -1,5 +1,24 @@
 services:
   - type: web
+    name: company-radar-searxng
+    runtime: python
+    # pip install of SearXNG fails due to a setup.py bug (imports msgspec before it's installed).
+    # Workaround: clone the repo, install deps from requirements.txt, then run via PYTHONPATH.
+    buildCommand: >
+      git clone --depth 1 https://github.com/searxng/searxng.git .searxng-src &&
+      pip install -r .searxng-src/requirements.txt gunicorn
+    startCommand: gunicorn searx.webapp:application --bind 0.0.0.0:$PORT --timeout 60 --workers 2
+    envVars:
+      - key: PYTHONPATH
+        value: .searxng-src
+      - key: SEARXNG_SETTINGS_PATH
+        value: ./searxng/settings.yml
+      - key: SEARXNG_SECRET_KEY
+        generateValue: true
+      - key: SEARXNG_BASE_URL
+        sync: false   # set to https://company-radar-searxng.onrender.com
+
+  - type: web
     name: company-radar-backend
     runtime: python
     rootDir: backend
@@ -12,6 +31,6 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: SEARXNG_URL
-        sync: false   # https://company-radar-searxng.fly.dev/search
+        sync: false   # set to https://company-radar-searxng.onrender.com/search
       - key: ALLOWED_ORIGINS
-        sync: false   # https://your-app.vercel.app
+        sync: false   # set to https://your-app.vercel.app

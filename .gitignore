@@ -15,6 +15,7 @@ frontend/out/
 
 # SearXNG runtime
 searxng/uwsgi.ini
+.searxng-src/
 
 # OS
 .DS_Store
