@@ -5,7 +5,7 @@ from playwright.async_api import async_playwright
 
 log = logging.getLogger("scraper")
 
-CONCURRENCY = 3
+CONCURRENCY = 1
 
 # Sites that need JS rendering time — use networkidle + extra wait
 REVIEW_DOMAINS = {
@@ -90,7 +90,17 @@ async def scrape_urls(urls: list[str]) -> list[dict]:
             await page.close()
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-software-rasterizer",
+                "--single-process",
+            ],
+        )
         context = await browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "

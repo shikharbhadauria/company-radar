@@ -84,46 +84,6 @@ def _is_relevant(text: str, company_name: str) -> bool:
     return any(word in text_lower for word in words)
 
 
-def _search_duckduckgo(query: str) -> list[dict]:
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; CompanyRadar/1.0)"}
-        resp = requests.get(
-            "https://html.duckduckgo.com/html/",
-            params={"q": query},
-            headers=headers,
-            timeout=10,
-        )
-        from html.parser import HTMLParser
-
-        class DDGParser(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.results = []
-                self._current_url = ""
-                self._capture = False
-
-            def handle_starttag(self, tag, attrs):
-                attrs_dict = dict(attrs)
-                if tag == "a" and "result__a" in attrs_dict.get("class", ""):
-                    self._current_url = attrs_dict.get("href", "")
-                    self._capture = True
-
-            def handle_data(self, data):
-                if self._capture and self._current_url:
-                    self.results.append({"url": self._current_url, "title": data.strip()})
-                    self._capture = False
-                    self._current_url = ""
-
-            def handle_endtag(self, tag):
-                if tag == "a":
-                    self._capture = False
-
-        parser = DDGParser()
-        parser.feed(resp.text)
-        return parser.results[:MAX_RESULTS_PER_QUERY]
-    except Exception:
-        return []
-
 
 def search_web(query: str) -> list[dict]:
     try:
@@ -136,13 +96,10 @@ def search_web(query: str) -> list[dict]:
                             headers={"X-Forwarded-For": "127.0.0.1"})
         data = resp.json()
         results = data.get("results", [])[:MAX_RESULTS_PER_QUERY]
-        if results:
-            return [{"url": r.get("url", ""), "title": r.get("title", "")} for r in results if r.get("url")]
-    except Exception:
-        pass
-
-    log.warning("SearXNG unavailable or returned no results — falling back to DuckDuckGo")
-    return _search_duckduckgo(query)
+        return [{"url": r.get("url", ""), "title": r.get("title", "")} for r in results if r.get("url")]
+    except Exception as e:
+        log.warning(f"SearXNG unavailable: {e}")
+        return []
 
 
 async def search_embed(state: "ResearchState") -> "ResearchState":
