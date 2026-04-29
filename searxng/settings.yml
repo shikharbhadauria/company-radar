@@ -1,12 +1,18 @@
-use_default_settings: true
+use_default_settings:
+  engines:
+    remove:
+      - ahmia           # Tor-based, requires Tor to be running
+      - torch           # Tor-based, engine file missing in current version
+      - wikidata        # Wikidata SPARQL API changed, init fails
+      - karmasearch         # Returns 403
+      - karmasearch videos  # Returns 403
 
 server:
-  # Overridden by SEARXNG_SECRET_KEY env var in production
-  secret_key: "local-dev-secret-key-change-in-prod"
+  secret_key: "local-dev-secret-key-change-in-prod"  # overridden by SEARXNG_SECRET_KEY env var
   bind_address: "0.0.0.0"
   port: 8080
-  # Overridden by SEARXNG_BASE_URL env var in production
-  base_url: "http://localhost:8080"
+  base_url: "http://localhost:8080"  # overridden by SEARXNG_BASE_URL env var
+  limiter: false
 
 search:
   formats:
@@ -33,6 +39,11 @@ engines:
     engine: wikipedia
     shortcut: w
     disabled: false
+
+  - name: brave
+    engine: brave
+    shortcut: br
+    disabled: true
 
 ui:
   static_use_hash: true
