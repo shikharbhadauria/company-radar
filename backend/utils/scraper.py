@@ -54,11 +54,7 @@ async def _scrape_one(page, url: str) -> dict:
     log.info(f"  Scraping: {url}")
     is_review = _is_review_domain(url)
     try:
-        await page.goto(
-            url,
-            timeout=15000 if is_review else 8000,
-            wait_until="networkidle" if is_review else "domcontentloaded",
-        )
+        await page.goto(url, timeout=12000, wait_until="domcontentloaded")
 
         if is_review:
             await page.wait_for_timeout(2000)
@@ -97,8 +93,6 @@ async def scrape_urls(urls: list[str]) -> list[dict]:
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
-                "--disable-software-rasterizer",
-                "--single-process",
             ],
         )
         context = await browser.new_context(
