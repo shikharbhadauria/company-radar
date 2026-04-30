@@ -46,12 +46,3 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
         working-directory: frontend
-
-  deploy:
-    name: Deploy to Render
-    needs: [check-backend, check-frontend]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Deploy backend
-        run: curl -f -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
