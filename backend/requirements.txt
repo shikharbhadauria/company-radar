@@ -5,6 +5,6 @@ langchain-core
 chromadb
 fastembed
 groq
-playwright
+httpx
 requests
 python-dotenv
