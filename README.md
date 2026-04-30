@@ -11,7 +11,7 @@ A full-stack company research tool for software engineers evaluating potential e
 | LLM | Groq API (`llama-3.3-70b-versatile`) |
 | Embeddings | fastembed (`BAAI/bge-small-en-v1.5`, runs inside the backend process) |
 | Web Search | SearXNG — Android phone (Termux) exposed via Serveo SSH tunnel |
-| Web Scraping | Playwright (Chromium) |
+| Web Scraping | httpx (async HTTP, no browser) |
 | Vector Store | ChromaDB (embedded, persists to `./chroma_data`) |
 
 > **Why run SearXNG on a phone?** Cloud providers (Render, AWS, GCP) are blocked by Google, Bing, and DuckDuckGo. Running SearXNG on a home network bypasses this — a residential IP returns real search results. The phone stays on and the tunnel keeps the URL stable.
@@ -20,7 +20,7 @@ A full-stack company research tool for software engineers evaluating potential e
 
 1. You enter a **company name** and your **profile** (experience, target role, priorities, reason for leaving)
 2. The **Planner** generates 11 targeted search queries (site-specific: Glassdoor, AmbitionBox, Reddit, TeamBlind, Levels.fyi, Naukri, etc.)
-3. The **Search & Embed** node runs queries via SearXNG (on your phone), scrapes pages with Playwright, chunks and embeds text with fastembed, and stores results in ChromaDB
+3. The **Search & Embed** node runs queries via SearXNG (on your phone), scrapes pages with httpx, chunks and embeds text with fastembed, and stores results in ChromaDB
 4. The **Synthesizer** retrieves the top 20 most relevant chunks via cosine similarity and generates a structured report using Groq
 5. If research gaps are detected, the loop runs up to 3 iterations with gap-filling queries
 6. The final report streams to the browser with:
@@ -69,7 +69,6 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-playwright install chromium
 ```
 
 The fastembed model (`BAAI/bge-small-en-v1.5`, ~45 MB) downloads automatically on first run.
@@ -276,7 +275,7 @@ Go to **render.com → New → Web Service**, connect your GitHub repo.
 - Set **Root Directory** to `backend`
 - Set **Build Command** to:
   ```
-  pip install -r requirements.txt && playwright install chromium && playwright install-deps chromium
+  pip install -r requirements.txt
   ```
 - Set **Start Command** to:
   ```
@@ -356,3 +355,4 @@ From now on, every push to `main` runs checks → deploys the backend if they pa
 - fastembed runs inside the backend process — no separate embedding service needed
 - SearXNG's `pip install git+...` fails due to a `setup.py` bug — both the phone setup and `searxng/start.sh` work around this by cloning and installing `requirements.txt` directly
 - The Serveo browser warning page does not affect API calls — only browser visits trigger it
+- Web scraping uses httpx (pure HTTP, no browser) — faster, lower memory, and no Chrome crashes on cloud free tiers; JavaScript-rendered content is not needed since review sites serve enough content in their initial HTML
