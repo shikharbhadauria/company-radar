@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ResearchInput, { UserProfile, DEFAULT_PROFILE } from "@/components/ResearchInput";
 import ProgressStream from "@/components/ProgressStream";
 import ReportViewer from "@/components/ReportViewer";
@@ -126,6 +126,8 @@ export default function Home() {
   const [sources, setSources] = useState<Source[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [generatedIn, setGeneratedIn] = useState<number | null>(null);
+  const startTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     setHistory(loadHistory());
@@ -138,6 +140,8 @@ export default function Home() {
     setProgressEvents([]);
     setReport("");
     setErrorMsg("");
+    setGeneratedIn(null);
+    startTimeRef.current = Date.now();
 
     try {
       const resp = await fetch("/api/research", {
@@ -190,6 +194,7 @@ export default function Home() {
               setHistory(loadHistory());
               setReport(event.content);
               setSources(event.sources || []);
+              setGeneratedIn(startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : null);
               setStatus("done");
               resolved = true;
             } else if (event.type === "error") {
@@ -270,7 +275,7 @@ export default function Home() {
       )}
 
       {status === "done" && report && (
-        <ReportViewer report={report} sources={sources} onReset={handleReset} />
+        <ReportViewer report={report} sources={sources} onReset={handleReset} generatedIn={generatedIn} />
       )}
     </main>
   );
