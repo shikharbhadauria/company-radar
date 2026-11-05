@@ -1,3 +1,3 @@
-LLM_MODEL = "llama-3.3-70b-versatile"
+LLM_MODEL = "openai/gpt-oss-120b"
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
-SYNTHESIS_MODEL = "llama-3.3-70b-versatile"
+SYNTHESIS_MODEL = "openai/gpt-oss-120b"

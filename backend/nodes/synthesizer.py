@@ -10,7 +10,7 @@ from utils.chroma_client import query_chunks
 from utils.embedder import embed
 
 log = logging.getLogger("synthesizer")
-_groq_client = AsyncGroq()
+_groq_client = AsyncGroq(max_retries=5)
 
 if TYPE_CHECKING:
     from graph import ResearchState
@@ -103,9 +103,12 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
 
     context = "\n\n---\n\n".join(context_parts)
 
+    # Groq free tier caps gpt-oss-120b at 8k tokens/minute (input + max_tokens),
+    # so keep the context around ~4k tokens.
+    MAX_CONTEXT_WORDS = 3000
     words = context.split()
-    if len(words) > 5000:
-        context = " ".join(words[:5000])
+    if len(words) > MAX_CONTEXT_WORDS:
+        context = " ".join(words[:MAX_CONTEXT_WORDS])
 
     date_range = ""
     if dates:
@@ -140,14 +143,15 @@ Write the company intelligence report in the exact format specified. Replace {{c
     log.info("Calling Groq API for synthesis...")
     response = await _groq_client.chat.completions.create(
         model=SYNTHESIS_MODEL,
-        max_tokens=2048,
+        max_tokens=3000,
+        reasoning_effort="low",
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_message},
         ],
     )
 
-    raw = response.choices[0].message.content.strip()
+    raw = (response.choices[0].message.content or "").strip()
     log.info(f"Groq response received ({len(raw)} chars)")
 
     gaps = []
