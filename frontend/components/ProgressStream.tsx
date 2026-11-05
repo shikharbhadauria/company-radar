@@ -133,6 +133,8 @@ function Radar({ active, blipCount }: { active: boolean; blipCount: number }) {
 export default function ProgressStream({ events, loading, companyName }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [blipCount, setBlipCount] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number | null>(null);
 
   // Add a blip every time we get a new search result
   useEffect(() => {
@@ -143,8 +145,31 @@ export default function ProgressStream({ events, loading, companyName }: Props) 
   }, [events]);
 
   useEffect(() => {
+    if (loading && startRef.current === null) {
+      startRef.current = Date.now();
+      setElapsed(0);
+    }
+    if (!loading) {
+      startRef.current = null;
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    if (!loading) return;
+    const id = setInterval(() => {
+      if (startRef.current !== null) {
+        setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [loading]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [events]);
+
+  const formatTime = (s: number) =>
+    s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 
   if (events.length === 0 && !loading) return null;
 
@@ -220,7 +245,7 @@ export default function ProgressStream({ events, loading, companyName }: Props) 
                   animation: loading ? "pulse 1.4s ease-in-out infinite" : "none",
                 }}
               />
-              <div>
+              <div style={{ minWidth: 0, overflow: "hidden" }}>
                 <div style={s.statusMessage}>{latestEvent.message}</div>
                 {latestEvent.detail && (
                   <div style={s.statusDetail}>{latestEvent.detail}</div>
@@ -280,6 +305,11 @@ export default function ProgressStream({ events, loading, companyName }: Props) 
             {blipCount > 0 && (
               <span style={{ ...s.statBadge, color: "#34d399", borderColor: "#34d39940" }}>
                 {blipCount * 3}+ signals found
+              </span>
+            )}
+            {(loading || elapsed > 0) && (
+              <span style={{ ...s.statBadge, color: loading ? "#f59e0b" : "#6b7280", borderColor: loading ? "#f59e0b40" : "#1f1f30" }}>
+                {loading ? `⏱ ${formatTime(elapsed)}` : `Done in ${formatTime(elapsed)}`}
               </span>
             )}
           </div>

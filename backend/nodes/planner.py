@@ -7,7 +7,7 @@ from config import LLM_MODEL
 from groq import AsyncGroq
 
 log = logging.getLogger("planner")
-_client = AsyncGroq()
+_client = AsyncGroq(max_retries=5)
 
 if TYPE_CHECKING:
     from graph import ResearchState
@@ -49,12 +49,14 @@ Return ONLY a valid JSON array of exactly 11 search query strings. No preamble, 
     log.info(f"Calling Groq API (iteration={iteration}, gaps={len(gaps)})")
     response = await _client.chat.completions.create(
         model=LLM_MODEL,
-        max_tokens=600,
+        max_tokens=1500,
+        reasoning_effort="low",
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = response.choices[0].message.content.strip()
+    raw = (response.choices[0].message.content or "").strip()
 
+    sub_queries = []
     try:
         sub_queries = json.loads(raw)
         if not isinstance(sub_queries, list):

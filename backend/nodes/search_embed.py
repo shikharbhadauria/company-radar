@@ -15,9 +15,10 @@ if TYPE_CHECKING:
     from graph import ResearchState
 
 import os
-SEARXNG_URL = os.environ.get("SEARXNG_URL")
-if not SEARXNG_URL:
-    raise RuntimeError("SEARXNG_URL env var is required")
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
+if not TAVILY_API_KEY:
+    raise RuntimeError("TAVILY_API_KEY env var is required")
+TAVILY_URL = "https://api.tavily.com/search"
 MAX_RESULTS_PER_QUERY = 8
 MAX_CHUNKS_PER_PAGE = 4
 
@@ -87,18 +88,21 @@ def _is_relevant(text: str, company_name: str) -> bool:
 
 def search_web(query: str) -> list[dict]:
     try:
-        params = {
-            "q": query,
-            "format": "json",
-            "engines": "google,bing,duckduckgo",
-        }
-        resp = requests.get(SEARXNG_URL, params=params, timeout=10,
-                            headers={"X-Forwarded-For": "127.0.0.1"})
-        data = resp.json()
-        results = data.get("results", [])[:MAX_RESULTS_PER_QUERY]
+        resp = requests.post(
+            TAVILY_URL,
+            json={
+                "query": query,
+                "max_results": MAX_RESULTS_PER_QUERY,
+                "search_depth": "basic",
+            },
+            headers={"Authorization": f"Bearer {TAVILY_API_KEY}"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])[:MAX_RESULTS_PER_QUERY]
         return [{"url": r.get("url", ""), "title": r.get("title", "")} for r in results if r.get("url")]
     except Exception as e:
-        log.warning(f"SearXNG unavailable: {e}")
+        log.warning(f"Tavily search failed: {e}")
         return []
 
 
