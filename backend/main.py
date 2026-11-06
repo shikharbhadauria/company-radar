@@ -42,9 +42,6 @@ def startup_check():
             "Please set it in your environment or .env file before running the backend.",
             file=sys.stderr,
         )
-    from utils.chroma_client import cleanup_old_collections
-
-    cleanup_old_collections()
 
 
 class UserProfile(BaseModel):
@@ -67,10 +64,8 @@ async def run_research(company_name: str, user_profile: dict):
     import uuid
 
     from graph import research_graph
-    from utils.chroma_client import get_collection
 
     session_id = uuid.uuid4().hex[:8]
-    get_collection(session_id)
     log.info(f"[{session_id}] Starting company analysis: {company_name!r}")
 
     original_query = f"software engineer salary work life balance culture experience at {company_name}"
@@ -90,7 +85,7 @@ async def run_research(company_name: str, user_profile: dict):
 
     node_labels = {
         "planner": "Planning research queries",
-        "search_embed": "Searching & scraping the web",
+        "search_embed": "Searching the web",
         "synthesizer": "Writing the intelligence report",
         "increment": "Checking for research gaps",
     }

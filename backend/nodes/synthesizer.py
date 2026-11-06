@@ -1,13 +1,13 @@
 import json
 import logging
 import re
+from collections import Counter
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from config import SYNTHESIS_MODEL
 from groq import AsyncGroq
 from langchain_core.callbacks.manager import adispatch_custom_event
-from utils.chroma_client import query_chunks
-from utils.embedder import embed
 
 log = logging.getLogger("synthesizer")
 _groq_client = AsyncGroq(max_retries=5)
@@ -59,15 +59,39 @@ After the report, add an HTML comment with remaining research gaps:
 If coverage is sufficient, use: <!-- GAPS: [] -->"""
 
 
+# Groq free tier caps gpt-oss-120b at 8k tokens/minute (input + max_tokens),
+# so keep the source context around ~4k tokens.
+MAX_CONTEXT_WORDS = 3000
+MAX_WORDS_PER_SOURCE = 250
+PREFERRED_DOMAIN_BOOST = 0.1
+MAX_SOURCES_PER_DOMAIN = 3
+
+
+def _select_sources(collected: list[dict]) -> list[dict]:
+    """Pick the most relevant Tavily passages that fit the context budget."""
+    ranked = sorted(
+        collected,
+        key=lambda c: c.get("score", 0) + (PREFERRED_DOMAIN_BOOST if c.get("priority") == 0 else 0),
+        reverse=True,
+    )
+    selected, used = [], 0
+    per_domain: Counter = Counter()
+    for c in ranked:
+        domain = urlparse(c["url"]).netloc.lower().removeprefix("www.")
+        if per_domain[domain] >= MAX_SOURCES_PER_DOMAIN:
+            continue
+        words = c["text"].split()[:MAX_WORDS_PER_SOURCE]
+        if used + len(words) > MAX_CONTEXT_WORDS:
+            continue
+        selected.append({**c, "text": " ".join(words)})
+        used += len(words)
+        per_domain[domain] += 1
+    return selected
+
+
 async def synthesizer(state: "ResearchState") -> "ResearchState":
-    original_query = state["original_query"]
-    session_id = state["session_id"]
-
-    log.info("Embedding query for retrieval...")
-    query_embedding = await embed(original_query)
-
-    chunks = query_chunks(session_id, query_embedding, n_results=20)
-    log.info(f"Retrieved {len(chunks)} chunks from ChromaDB")
+    chunks = _select_sources(state.get("collected_chunks", []))
+    log.info(f"Selected {len(chunks)} sources for synthesis")
 
     if not chunks:
         return {
@@ -91,9 +115,9 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
     seen_urls: set = set()
     dates = []
     for i, chunk in enumerate(chunks, 1):
-        url = chunk["metadata"].get("url", "")
-        title = chunk["metadata"].get("title", "") or url
-        published_date = chunk["metadata"].get("published_date", "")
+        url = chunk.get("url", "")
+        title = chunk.get("title", "") or url
+        published_date = chunk.get("published_date", "")
         context_parts.append(f"[{i}] ({url})\n{chunk['text']}")
         if url and url not in seen_urls:
             seen_urls.add(url)
@@ -103,12 +127,6 @@ async def synthesizer(state: "ResearchState") -> "ResearchState":
 
     context = "\n\n---\n\n".join(context_parts)
 
-    # Groq free tier caps gpt-oss-120b at 8k tokens/minute (input + max_tokens),
-    # so keep the context around ~4k tokens.
-    MAX_CONTEXT_WORDS = 3000
-    words = context.split()
-    if len(words) > MAX_CONTEXT_WORDS:
-        context = " ".join(words[:MAX_CONTEXT_WORDS])
 
     date_range = ""
     if dates:
@@ -137,7 +155,7 @@ Write the company intelligence report in the exact format specified. Replace {{c
         {
             "node": "synthesizer",
             "message": f"Analyzing {len(chunks)} sources with {SYNTHESIS_MODEL}",
-            "detail": f"{len(words):,} words of research context",
+            "detail": f"{len(context.split()):,} words of research context",
         },
     )
     log.info("Calling Groq API for synthesis...")

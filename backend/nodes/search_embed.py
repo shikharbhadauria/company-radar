@@ -1,26 +1,31 @@
-import hashlib
+"""Search node: Tavily finds pages AND returns their relevant text.
+
+No scraping or local embedding happens on our server — Tavily fetches the
+pages from its own infrastructure and returns the most relevant passages,
+which the synthesizer then reads directly.
+"""
+import asyncio
 import logging
-import requests
-from urllib.parse import urlparse
+import os
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
+
+import httpx
 from langchain_core.callbacks.manager import adispatch_custom_event
 
-log = logging.getLogger("search_embed")
-from utils.embedder import embed
-from utils.scraper import scrape_urls
-from utils.chunker import chunk_text
-from utils.chroma_client import add_chunk
+from config import TAVILY_SEARCH_DEPTH
 
 if TYPE_CHECKING:
     from graph import ResearchState
 
-import os
+log = logging.getLogger("search_embed")
+
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
 if not TAVILY_API_KEY:
     raise RuntimeError("TAVILY_API_KEY env var is required")
 TAVILY_URL = "https://api.tavily.com/search"
-MAX_RESULTS_PER_QUERY = 8
-MAX_CHUNKS_PER_PAGE = 4
+MAX_RESULTS_PER_QUERY = 5
+MIN_CONTENT_CHARS = 150
 
 BLOCKED_DOMAINS = {
     "youtube.com", "youtu.be",
@@ -78,123 +83,84 @@ def _priority(url: str) -> int:
 
 
 def _is_relevant(text: str, company_name: str) -> bool:
-    if not text or len(text) < 150:
+    if not text or len(text) < MIN_CONTENT_CHARS:
         return False
-    words = [w for w in company_name.lower().split() if len(w) > 3]
     text_lower = text.lower()
+    words = [w for w in company_name.lower().split() if len(w) > 3]
+    if not words:  # short names like "IBM" or "TCS"
+        words = [company_name.lower().strip()]
     return any(word in text_lower for word in words)
 
 
-
-def search_web(query: str) -> list[dict]:
+async def search_web(client: httpx.AsyncClient, query: str) -> list[dict]:
+    """Run one Tavily search. Returns results with url, title, content, score."""
     try:
-        resp = requests.post(
+        resp = await client.post(
             TAVILY_URL,
             json={
                 "query": query,
                 "max_results": MAX_RESULTS_PER_QUERY,
-                "search_depth": "basic",
+                "search_depth": TAVILY_SEARCH_DEPTH,
             },
             headers={"Authorization": f"Bearer {TAVILY_API_KEY}"},
-            timeout=15,
         )
         resp.raise_for_status()
-        results = resp.json().get("results", [])[:MAX_RESULTS_PER_QUERY]
-        return [{"url": r.get("url", ""), "title": r.get("title", "")} for r in results if r.get("url")]
+        return [r for r in resp.json().get("results", []) if r.get("url")]
     except Exception as e:
-        log.warning(f"Tavily search failed: {e}")
+        log.warning(f"Tavily search failed for {query!r}: {e}")
         return []
 
 
 async def search_embed(state: "ResearchState") -> "ResearchState":
     sub_queries = state.get("sub_queries", [])
     collected_chunks = list(state.get("collected_chunks", []))
-    existing_urls = {c["url"] for c in collected_chunks}
+    seen_urls = {c["url"] for c in collected_chunks}
     iteration = state.get("iteration", 1)
-    session_id = state["session_id"]
     company_name = state.get("company_name", "")
 
-    for q_idx, query in enumerate(sub_queries, 1):
-        log.info(f"Searching: {query!r}")
-        await adispatch_custom_event("progress", {
-            "node": "search_embed",
-            "message": f"Searching ({q_idx}/{len(sub_queries)})",
-            "detail": query,
-        })
-
-        results = search_web(query)
-
-        # Filter blocked domains and already-seen URLs
-        new_results = [
-            r for r in results
-            if r["url"] not in existing_urls and _is_allowed(r["url"])
-        ]
-        # Preferred domains first
-        new_results.sort(key=lambda r: _priority(r["url"]))
-        log.info(f"  Got {len(results)} results, {len(new_results)} after filtering")
-
-        if not new_results:
-            continue
-
-        urls = [r["url"] for r in new_results]
-        titles = {r["url"]: r["title"] for r in new_results}
-
-        await adispatch_custom_event("progress", {
-            "node": "search_embed",
-            "message": f"Scraping {len(urls)} pages",
-            "detail": ", ".join(_get_domain(u) for u in urls[:5]),
-        })
-
-        log.info(f"  Scraping {len(urls)} URLs...")
-        scraped = await scrape_urls(urls)
-
-        embedded_count = 0
-        for url, page_data in zip(urls, scraped):
-            text = page_data["text"]
-            published_date = page_data["date"]
-            existing_urls.add(url)
-            if not text:
-                log.info(f"  Skipped (empty): {url}")
-                continue
-
-            if not _is_relevant(text, company_name):
-                log.info(f"  Skipped (irrelevant): {url}")
-                continue
-
-            chunks = chunk_text(text)[:MAX_CHUNKS_PER_PAGE]
-            title = titles.get(url, "")
-            log.info(f"  Embedding {len(chunks)} chunks from {url}")
-            embedded_count += len(chunks)
-
-            for i, chunk in enumerate(chunks):
-                chunk_id = hashlib.md5(f"{url}_{i}".encode()).hexdigest()
-                try:
-                    embedding = await embed(chunk)
-
-                    metadata = {
-                        "url": url,
-                        "title": title,
-                        "query": query,
-                        "iteration": iteration,
-                        "published_date": published_date,
-                    }
-
-                    add_chunk(session_id, chunk, embedding, metadata, chunk_id)
-
-                    collected_chunks.append({
-                        "text": chunk,
-                        "url": url,
-                        "title": title,
-                        "chunk_id": chunk_id,
-                    })
-                except Exception as e:
-                    log.warning(f"  Embed failed for chunk {i} of {url}: {e}")
-                    continue
-
-    log.info(f"Done. Total chunks collected: {len(collected_chunks)}")
     await adispatch_custom_event("progress", {
         "node": "search_embed",
-        "message": f"Done — collected {len(collected_chunks)} content chunks",
+        "message": f"Searching the web ({len(sub_queries)} queries)",
+        "detail": "",
+    })
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        tasks = [asyncio.create_task(search_web(client, q)) for q in sub_queries]
+        done_count = 0
+        for finished in asyncio.as_completed(tasks):
+            results = await finished
+            done_count += 1
+            added = 0
+            for r in results:
+                url = r["url"]
+                content = (r.get("content") or "").strip()
+                if url in seen_urls or not _is_allowed(url):
+                    continue
+                if not _is_relevant(content, company_name):
+                    continue
+                seen_urls.add(url)
+                collected_chunks.append({
+                    "text": content,
+                    "url": url,
+                    "title": r.get("title", "") or url,
+                    "score": float(r.get("score") or 0),
+                    "priority": _priority(url),
+                    "iteration": iteration,
+                    "published_date": r.get("published_date", "") or "",
+                })
+                added += 1
+            await adispatch_custom_event("progress", {
+                "node": "search_embed",
+                "message": f"Searching ({done_count}/{len(sub_queries)})",
+                "detail": f"{added} useful sources: " + ", ".join(
+                    _get_domain(r["url"]) for r in results[:5]
+                ),
+            })
+
+    log.info(f"Iteration {iteration}: {len(collected_chunks)} sources collected in total")
+    await adispatch_custom_event("progress", {
+        "node": "search_embed",
+        "message": f"Done — collected {len(collected_chunks)} sources",
         "detail": "",
     })
     return {**state, "collected_chunks": collected_chunks}

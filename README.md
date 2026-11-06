@@ -9,10 +9,8 @@ A full-stack company research tool for software engineers evaluating potential e
 | Frontend | Next.js 14 (App Router, TypeScript) — Vercel (free) |
 | Backend | Python FastAPI + LangGraph — Render Web Service (free) |
 | LLM | Groq API (`openai/gpt-oss-120b`) |
-| Embeddings | fastembed (`BAAI/bge-small-en-v1.5`, runs inside the backend process) |
 | Web Search | Tavily Search API (hosted, free tier) |
-| Web Scraping | httpx (async HTTP, no browser) |
-| Vector Store | ChromaDB (embedded, persists to `./chroma_data`) |
+| Page content | Tavily returns the relevant text of each result — no scraping or embedding on our server |
 
 > **Why Tavily?** Search engines block cloud IPs (Render, AWS, GCP), so a self-hosted SearXNG on Render returns nothing. Tavily is a hosted search API built for LLM agents — it works from any server with no extra infrastructure to keep running.
 
@@ -20,8 +18,8 @@ A full-stack company research tool for software engineers evaluating potential e
 
 1. You enter a **company name** and your **profile** (experience, target role, priorities, reason for leaving)
 2. The **Planner** generates 11 targeted search queries (site-specific: Glassdoor, AmbitionBox, Reddit, TeamBlind, Levels.fyi, Naukri, etc.)
-3. The **Search & Embed** node runs queries via the Tavily API, scrapes pages with httpx, chunks and embeds text with fastembed, and stores results in ChromaDB
-4. The **Synthesizer** retrieves the top 20 most relevant chunks via cosine similarity and generates a structured report using Groq
+3. The **Search** node runs all queries in parallel via the Tavily API. Tavily fetches each page on its own servers and returns the most relevant passages, so sites that block cloud scrapers (Glassdoor, Indeed, Levels.fyi) still contribute
+4. The **Synthesizer** picks the highest-scoring passages (max 3 per website, ~3,000 words to fit Groq's free-tier limit) and generates a structured report using Groq
 5. If research gaps are detected, the loop runs up to 3 iterations with gap-filling queries
 6. The final report streams to the browser with:
    - Company vitals (size, funding, ratings, salaries, remote policy)
@@ -59,8 +57,6 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
-
-The fastembed model (`BAAI/bge-small-en-v1.5`, ~45 MB) downloads automatically on first run.
 
 ### 3. Start the backend
 
@@ -189,8 +185,7 @@ From now on, every push to `main` runs checks → deploys the backend if they pa
 
 ## Notes
 
-- Each research session creates a fresh ChromaDB collection; old collections are cleaned up after 7 days
 - Each research run makes up to ~33 Tavily searches (11 queries × up to 3 iterations) — keep this in mind against the free-tier monthly quota
-- The full research process takes 2–5 minutes depending on network speed and number of iterations
-- fastembed runs inside the backend process — no separate embedding service needed
-- Web scraping uses httpx (pure HTTP, no browser) — faster, lower memory, and no Chrome crashes on cloud free tiers; JavaScript-rendered content is not needed since review sites serve enough content in their initial HTML
+- A full research run takes ~1 minute; most of that is waiting on Groq's free-tier tokens-per-minute limit between iterations
+- The backend does no scraping or embedding — it only calls Groq and Tavily, so it runs comfortably on Render's free tier
+- `TAVILY_SEARCH_DEPTH` in `backend/config.py` switches between `basic` (1 credit/search) and `advanced` (2 credits/search, richer passages)
