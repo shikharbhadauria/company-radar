@@ -18,17 +18,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
       - name: Syntax check
-        run: |
-          python -m py_compile backend/main.py
-          python -m py_compile backend/graph.py
-          python -m py_compile backend/config.py
-          python -m py_compile backend/nodes/planner.py
-          python -m py_compile backend/nodes/search_embed.py
-          python -m py_compile backend/nodes/synthesizer.py
-          python -m py_compile backend/utils/embedder.py
-          python -m py_compile backend/utils/scraper.py
-          python -m py_compile backend/utils/chunker.py
-          python -m py_compile backend/utils/chroma_client.py
+        run: python -m compileall -q backend/main.py backend/graph.py backend/config.py backend/nodes backend/utils
 
   check-frontend:
     name: Check frontend

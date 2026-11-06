@@ -2,9 +2,6 @@ fastapi
 uvicorn[standard]
 langgraph
 langchain-core
-chromadb
-fastembed
 groq
 httpx
-requests
 python-dotenv
